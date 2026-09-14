@@ -1,0 +1,14 @@
+import * as fengariNS from '../node_modules/fengari/src/fengari.js';
+const fengari = (typeof fengariNS.default === 'object' && fengariNS.default) ? fengariNS.default : fengariNS;
+export const lua = fengari.lua;
+export const lauxlib = fengari.lauxlib;
+export const lualib = fengari.lualib;
+export const luaconf = fengari.luaconf;
+export const to_jsstring = fengari.to_jsstring;
+export const to_luastring = fengari.to_luastring;
+export const to_uristring = fengari.to_uristring;
+export const luastring_of = fengari.luastring_of;
+export const luastring_eq = fengari.luastring_eq;
+export const luastring_indexOf = fengari.luastring_indexOf;
+export const FENGARI_VERSION = fengari.FENGARI_VERSION;
+export { luaL_openlibs } from '../node_modules/fengari/src/linit.js';
