@@ -21,7 +21,7 @@ Create a project with:
 |----------------|------------------------------------|
 | Root Directory | `services/2016-roblox-main`        |
 | Framework      | Next.js                            |
-| Node version   | 18.x (also pinned via `engines`)   |
+| Node version   | 24.x (also pinned via `engines`)   |
 | Build command  | `next build` (default)             |
 
 `config.json` is gitignored and **not** required: when it is missing (or when
