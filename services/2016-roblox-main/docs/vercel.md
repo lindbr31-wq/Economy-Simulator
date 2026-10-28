@@ -1,0 +1,116 @@
+# Deploying the frontend to Vercel
+
+The `2016-roblox` frontend is a stock Next.js 12 app and deploys to Vercel as-is.
+Vercel hosts the website and its `/api/proxy` serverless function; **everything
+else (the `Roblox.Website` .NET server, `services/api`, admin, game-server/RCC)
+must still run somewhere with a public URL**, because Vercel's functions cannot
+reach `localhost`.
+
+```
+browser ──► https://your-app.vercel.app        (this frontend, on Vercel)
+                 │
+                 └── /api/proxy?...  ──► https://backend.yourdomain.com/apisite/...
+                                          (your .NET/API backend, anywhere public)
+```
+
+## 1. Vercel project settings
+
+Create a project with:
+
+| Setting        | Value                              |
+|----------------|------------------------------------|
+| Root Directory | `services/2016-roblox-main`        |
+| Framework      | Next.js                            |
+| Node version   | 18.x (also pinned via `engines`)   |
+| Build command  | `next build` (default)             |
+
+`config.json` is gitignored and **not** required: when it is missing (or when
+running on Vercel), `next.config.js` builds the configuration from environment
+variables instead. Locally you can keep using `node ./util/create_config.js`.
+
+## 2. Environment variables
+
+Set these in the Vercel project (they are read at **build** time, so redeploy
+after changing them):
+
+| Variable                     | Example value                                      | Notes |
+|------------------------------|----------------------------------------------------|-------|
+| `BACKEND_BASE_URL`           | `https://www.yourdomain.com`                       | Public URL of this frontend (used by the proxy's URL allow-list). |
+| `BACKEND_API_FORMAT`         | `https://backend.yourdomain.com/apisite/{0}{1}`    | How to reach the backend's apisite routes. `{0}` = api site name (www, api, assetdelivery, ...), `{1}` = path. |
+| `BACKEND_CHAT_URL`           | `https://backend.yourdomain.com/chat`              | SignalR chat hub. Must be absolute on Vercel (`/chat` would hit Vercel itself). |
+| `CSRF_KEY`                   | long random string                                 | **Required.** Fixed key for login-CSRF signing. Without it each serverless instance makes its own and logins break on cold starts. |
+| `COOKIE_DOMAIN_REWRITE`      | *(leave empty on Vercel)*                          | Rewrites `Domain=` on `Set-Cookie` from the backend. Empty/unset strips it (host-only cookies — correct for `*.vercel.app`). Set to `localhost` or your domain if needed. |
+| `PROXY_ENABLED`              | `true` (default)                                   | `false` makes the browser call the backend directly (backend then needs CORS + credentials for the Vercel origin). |
+| `BACKEND_AUTHORIZATION`      | *(optional)*                                       | Shared secret forwarded to the backend, if your backend requires one. |
+| `BACKEND_AUTHORIZATION_HEADER` | *(optional)*                                     | Header name for the above (default `authorization`). |
+
+The proxy (`pages/api/proxy.js`) only forwards to hosts it considers safe: the
+domain of `BACKEND_BASE_URL` and the domain of `BACKEND_API_FORMAT`. So the
+frontend and the backend may live on **different** domains.
+
+## 3. Backend requirements
+
+* The backend must be **publicly reachable** — a VPS, or a home machine behind
+  a Cloudflare Tunnel / ngrok / similar. A reverse proxy that maps
+  `https://backend.yourdomain.com/apisite/{0}{1}` onto the .NET site's
+  `/apisite/{0}{1}` routes works well.
+* For a clean setup use one base domain with split DNS:
+  `www.yourdomain.com` → Vercel, `backend.yourdomain.com` → your server. A
+  custom domain on Vercel is free and avoids cookie/proxy edge cases.
+* **Chat** (`Roblox.EconomyChat` / the SignalR hub at `/chat`) stays on the
+  backend; `BACKEND_CHAT_URL` just points the browser at it.
+
+## 4. Database: Supabase Postgres
+
+The services want PostgreSQL 13+. A Supabase project works directly:
+
+* `services/api/config.json` (Knex):
+
+  ```json
+  {
+    "knex": {
+      "client": "pg",
+      "connection": {
+        "host": "db.<project-ref>.supabase.co",
+        "user": "postgres",
+        "password": "<your-supabase-db-password>",
+        "database": "postgres",
+        "port": 5432,
+        "ssl": { "rejectUnauthorized": false }
+      }
+    }
+  }
+  ```
+
+* `services/Roblox/Roblox.Website/appsettings.json` (`ConnectionStrings` /
+  `DbConnection` section): same host/user/password/database.
+
+Use the **direct** connection (port 5432) or session pooler for the long-running
+backend services; the transaction pooler (port 6543) is not a fit for Knex
+migrations. Run `npx knex migrate:latest` in `services/api` as usual.
+
+Note: Supabase does not provide **Redis**, which the backend also requires —
+run a local Redis (e.g. Memurai on Windows) or any hosted Redis and point the
+services at it.
+
+## 5. What still runs off-Vercel
+
+* Game joins (`PlaceLauncher.ashx`), RCC/game-server, and webplayer asset
+  serving depend on the backend being public too — deploying the site on Vercel
+  does not cover those.
+* Watch Vercel's serverless response size limit (4.5 MB on the Hobby plan) if
+  large assets are fetched *through* `/api/proxy` instead of directly from the
+  backend.
+
+## 6. Deploy
+
+```sh
+cd services/2016-roblox-main
+npm i
+npm test          # unit tests (proxy URL allow-list etc.)
+VERCEL=1 npm run build   # smoke-test the env-driven build
+```
+
+Then connect the repo in the Vercel dashboard (or `vercel deploy`) with the
+settings above. Remember: env vars are baked at build time — set them first,
+then deploy.

@@ -61,5 +61,8 @@
     "expose-loader": "^3.0.0",
     "jest": "^27.4.7",
     "regenerator-runtime": "^0.13.9"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }

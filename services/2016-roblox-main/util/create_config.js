@@ -34,7 +34,9 @@ const main = () => {
           catalogDetailsPageOwnersTabEnabled: false,
         },
         "baseUrl": "https://www.roblox.com",
-        "apiFormat": "https://{0}.roblox.com{1}"
+        "apiFormat": "https://{0}.roblox.com{1}",
+        "chatUrl": "/chat",
+        "cookieDomainRewrite": ""
       }
     },
   }));
