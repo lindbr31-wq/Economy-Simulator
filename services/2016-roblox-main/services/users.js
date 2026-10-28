@@ -1,10 +1,20 @@
 import request, { getBaseUrl } from "../lib/request"
 import { getFullUrl } from "../lib/request";
+import axios from "axios";
 
 const baseUrl = getFullUrl('users', '');
 
 export const getMyInfo = () => {
-  return request('GET', baseUrl + '/v1/users/authenticated').then(d => d.data)
+  // Prefer the local session (Supabase-backed login). If there is none but a
+  // legacy .ROBLOSECURITY cookie login was used, fall back to the backend.
+  return axios.get('/api/auth/me').then(d => d.data).catch(err => {
+    const status = err.response && err.response.status;
+    const hasLegacySession = typeof document !== 'undefined' && document.cookie.indexOf('has_legacy_session=1') !== -1;
+    if (status === 401 && hasLegacySession) {
+      return request('GET', baseUrl + '/v1/users/authenticated').then(d => d.data);
+    }
+    throw err;
+  });
 }
 
 export const getUserInfo = ({ userId }) => {

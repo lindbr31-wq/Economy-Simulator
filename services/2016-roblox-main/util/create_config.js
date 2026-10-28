@@ -32,6 +32,7 @@ const main = () => {
           gameGenreFilterSupported: true,
           avatarPageOutfitCreatedAtAvailable: false,
           catalogDetailsPageOwnersTabEnabled: false,
+          requireLoginThroughCookie: false,
         },
         "baseUrl": "https://www.roblox.com",
         "apiFormat": "https://{0}.roblox.com{1}",

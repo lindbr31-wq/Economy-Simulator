@@ -18,6 +18,7 @@ const defaultFlags = {
   gameGenreFilterSupported: true,
   avatarPageOutfitCreatedAtAvailable: false,
   catalogDetailsPageOwnersTabEnabled: false,
+  requireLoginThroughCookie: false,
 };
 
 // Build a config from environment variables. This is what runs on Vercel (and

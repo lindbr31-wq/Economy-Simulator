@@ -39,6 +39,8 @@ after changing them):
 | `BACKEND_API_FORMAT`         | `https://backend.yourdomain.com/apisite/{0}{1}`    | How to reach the backend's apisite routes. `{0}` = api site name (www, api, assetdelivery, ...), `{1}` = path. |
 | `BACKEND_CHAT_URL`           | `https://backend.yourdomain.com/chat`              | SignalR chat hub. Must be absolute on Vercel (`/chat` would hit Vercel itself). |
 | `CSRF_KEY`                   | long random string                                 | **Required.** Fixed key for login-CSRF signing. Without it each serverless instance makes its own and logins break on cold starts. |
+| `SESSION_KEY`                | long random string                                 | **Required.** Signs the local login session cookie (`ECON_SESSION`) used by username/password auth. |
+| `SUPABASE_DB_URL`            | `postgres://econ_web:<pw>@db.<ref>.supabase.co:5432/postgres` | **Required for login/signup.** Postgres connection string for the local auth API routes. |
 | `COOKIE_DOMAIN_REWRITE`      | *(leave empty on Vercel)*                          | Rewrites `Domain=` on `Set-Cookie` from the backend. Empty/unset strips it (host-only cookies — correct for `*.vercel.app`). Set to `localhost` or your domain if needed. |
 | `PROXY_ENABLED`              | `true` (default)                                   | `false` makes the browser call the backend directly (backend then needs CORS + credentials for the Vercel origin). |
 | `BACKEND_AUTHORIZATION`      | *(optional)*                                       | Shared secret forwarded to the backend, if your backend requires one. |
@@ -62,28 +64,33 @@ frontend and the backend may live on **different** domains.
 
 ## 4. Database: Supabase Postgres
 
-The services want PostgreSQL 13+. A Supabase project works directly:
+The services want PostgreSQL 13+. A Supabase project works directly. The
+canonical schema (81 tables, generated from the `services/api` knex migrations)
+lives in [`database/schema.sql`](../../../database/schema.sql) and is already
+applied to the Supabase project, including the `knex_migrations` bookkeeping —
+so `npx knex migrate:latest` in `services/api` will see everything as applied.
 
-* `services/api/config.json` (Knex):
+A dedicated `econ_web` login role exists for the website (SELECT/INSERT/UPDATE/
+DELETE on `public`); put its connection string in `SUPABASE_DB_URL` as shown
+above. For the backend services (`services/api/config.json` for Knex and
+`services/Roblox/Roblox.Website/appsettings.json`), use the project's
+`postgres` superuser connection string from the Supabase dashboard:
 
-  ```json
-  {
-    "knex": {
-      "client": "pg",
-      "connection": {
-        "host": "db.<project-ref>.supabase.co",
-        "user": "postgres",
-        "password": "<your-supabase-db-password>",
-        "database": "postgres",
-        "port": 5432,
-        "ssl": { "rejectUnauthorized": false }
-      }
+```json
+{
+  "knex": {
+    "client": "pg",
+    "connection": {
+      "host": "db.<project-ref>.supabase.co",
+      "user": "postgres",
+      "password": "<your-supabase-db-password>",
+      "database": "postgres",
+      "port": 5432,
+      "ssl": { "rejectUnauthorized": false }
     }
   }
-  ```
-
-* `services/Roblox/Roblox.Website/appsettings.json` (`ConnectionStrings` /
-  `DbConnection` section): same host/user/password/database.
+}
+```
 
 Use the **direct** connection (port 5432) or session pooler for the long-running
 backend services; the transaction pooler (port 6543) is not a fit for Knex
@@ -93,7 +100,22 @@ Note: Supabase does not provide **Redis**, which the backend also requires —
 run a local Redis (e.g. Memurai on Windows) or any hosted Redis and point the
 services at it.
 
-## 5. What still runs off-Vercel
+## 5. Logging in (no .ROBLOSECURITY required)
+
+The site has first-class username/password auth backed by the Supabase
+database:
+
+* `/signup` (also linked from the navbar and login modal) creates an account
+  and logs the user in. `/login` accepts username + password by default.
+* Passwords are hashed with **Argon2id** in libsodium's PHC format — the same
+  format the .NET backend's `PasswordHasher` uses, so accounts created through
+  the website can also log in through the backend later (and vice versa).
+* Sessions are a signed JWT in an HttpOnly `ECON_SESSION` cookie (30 days).
+* The old "login with a .ROBLOSECURITY cookie" flow is still available on the
+  login page as an advanced option (useful while the .NET backend exists and
+  issues those cookies).
+
+## 6. What still runs off-Vercel
 
 * Game joins (`PlaceLauncher.ashx`), RCC/game-server, and webplayer asset
   serving depend on the backend being public too — deploying the site on Vercel
@@ -102,7 +124,7 @@ services at it.
   large assets are fetched *through* `/api/proxy` instead of directly from the
   backend.
 
-## 6. Deploy
+## 7. Deploy
 
 ```sh
 cd services/2016-roblox-main
