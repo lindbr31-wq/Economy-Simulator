@@ -115,7 +115,29 @@ database:
   login page as an advanced option (useful while the .NET backend exists and
   issues those cookies).
 
-## 6. What still runs off-Vercel
+## 6. Games, catalog & avatar editor (no game server needed)
+
+The site ships with a self-contained web games client that needs **no game
+server** and no `services/api` backend - only Supabase (or nothing at all):
+
+- **`/games`** - three original canvas games (Sky Obby: Tower Trials, Brick
+  Busters, Crossy Canyon) playable instantly in the browser. The shared game
+  client (`components/webGame/`) handles input (keyboard/mouse/touch), pause and
+  score submission. Game pages include visit counts, like/dislike votes and a
+  per-game leaderboard (`web_game_score`).
+- **`/catalog`** - 22 original items (hats, faces, shirts, pants, gear) rendered
+  as SVG (`components/itemArt/`). Buying uses a starter wallet (100 R$ +
+  2,500 Tix) with an atomic balance-check purchase (`/api/web/catalog/[id]/buy`).
+- **`/My/Character.aspx`** - the avatar editor: R6 blocky avatar rendered as SVG
+  (`components/avatarArt/`), body colors, and equipping owned items (up to 3
+  hats). Configs validate against inventory server-side.
+
+Data lives in the `web_*` tables (see `database/schema.sql`, seeded; knex
+migration `20261029120000_webPlatform.js`). Every page works in **local mode**
+too: if the API is unreachable or the user is logged out, `lib/webStore.js`
+falls back to localStorage so games, purchases and avatar edits still work.
+
+## 7. What still runs off-Vercel
 
 * Game joins (`PlaceLauncher.ashx`), RCC/game-server, and webplayer asset
   serving depend on the backend being public too — deploying the site on Vercel
@@ -124,7 +146,7 @@ database:
   large assets are fetched *through* `/api/proxy` instead of directly from the
   backend.
 
-## 7. Deploy
+## 8. Deploy
 
 ```sh
 cd services/2016-roblox-main
