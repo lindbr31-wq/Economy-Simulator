@@ -8,7 +8,8 @@ export const getResellers = ({ assetId, cursor, limit }) => {
 }
 
 export const getRobux = ({ userId }) => {
-  return request('GET', getFullUrl('economy', '/v1/users/' + userId + '/currency')).then(d => d.data);
+  // Local Supabase-backed wallet (feeds the navbar R$/Tix counters).
+  return request('GET', '/api/web/economy').then(d => d.data);
 }
 
 export const getRobuxGroup = ({ groupId }) => {

@@ -9,19 +9,39 @@ export const getGameUrl = ({ placeId, name }) => {
 }
 
 export const getUserGames = ({ userId, cursor }) => {
-  return request('GET', getFullUrl('games', `/v2/users/${userId}/games?cursor=${encodeURIComponent(cursor || '')}`)).then(d => d.data);
+  // No per-user game creation on the self-contained site (yet).
+  return Promise.resolve({ data: [], nextPageCursor: null });
 }
 
 export const getGroupGames = ({ groupId, cursor }) => {
-  return request('GET', getFullUrl('games', `/v2/groups/${groupId}/games?cursor=${encodeURIComponent(cursor || '')}`)).then(d => d.data);
+  return Promise.resolve({ data: [], nextPageCursor: null });
 }
 
 export const getGameSorts = ({ gameSortsContext }) => {
-  return request('GET', getFullUrl('games', `/v1/games/sorts?gameSortsContext=${encodeURIComponent(gameSortsContext || '')}`)).then(d => d.data)
+  return Promise.resolve({
+    sorts: [
+      { token: 'all', name: 'All', displayName: 'Featured Games' },
+    ],
+  });
 }
 
+const toGameRow = (g) => ({
+  universeId: Number(g.id),
+  placeId: Number(g.id),
+  name: g.name,
+  creatorId: 1,
+  creatorName: g.creator || 'EconomySim Games',
+  creatorType: 'User',
+  playerCount: Math.max(1, Math.round(Number(g.plays || 0) / 250)),
+  totalUpVotes: Number(g.likes || 0),
+  totalDownVotes: Number(g.dislikes || 0),
+});
+
 export const getGameList = ({ sortToken, limit, genre = 0, keyword }) => {
-  return request('GET', getFullUrl('games', `/v1/games/list?sortToken=${encodeURIComponent(sortToken)}&maxRows=${limit}&genre=${genre}&keyword=${keyword}`)).then(d => d.data)
+  return request('GET', '/api/web/games').then(d => {
+    const rows = (d.data.data || []).map(toGameRow);
+    return { games: rows };
+  });
 }
 
 export const getGameMedia = ({ universeId }) => {

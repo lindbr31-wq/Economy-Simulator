@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createUseStyles } from 'react-jss';
+import dynamic from 'next/dynamic';
 import Theme2016 from '../../components/theme2016';
-import AvatarArt from '../../components/avatarArt';
 import ItemArt from '../../components/itemArt';
 import { DEFAULT_AVATAR, BODY_COLOR_PALETTE } from '../../lib/catalogItems';
 import { getInventory, saveAvatar, getMe } from '../../lib/webStore';
+
+const Avatar3D = dynamic(() => import('../../components/avatar3d'), { ssr: false });
 
 const useStyles = createUseStyles({
   header: {
@@ -279,7 +281,7 @@ const MyCharacterPage = () => {
         <div className="row">
           <div className="col-12 col-md-5">
             <div className={s.preview}>
-              {config ? <AvatarArt config={config} size={280} /> : <div className={s.empty}>Loading…</div>}
+              {config ? <Avatar3D config={config} height={430} /> : <div className={s.empty}>Loading…</div>}
             </div>
             <div className={s.panel} style={{ marginTop: 12 }}>
               <button type="button" className={s.saveBtn} onClick={onSave} disabled={!config || busy}>

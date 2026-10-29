@@ -6,7 +6,11 @@ export const getRules = () => {
 }
 
 export const getAvatar = ({ userId }) => {
-  return request('GET', getFullUrl('avatar', '/v1/users/' + userId + '/avatar')).then(d => d.data);
+  // Local Supabase-backed avatar: currently-worn items for the profile panel.
+  return request('GET', '/api/web/users/' + userId + '/avatar').then(d => {
+    const data = d.data.data || {};
+    return { assets: data.equipped || [], bodyColors: (data.config && data.config.bodyColors) || {}, playerAvatarType: 'R6' };
+  });
 }
 
 export const getMyAvatar = () => {

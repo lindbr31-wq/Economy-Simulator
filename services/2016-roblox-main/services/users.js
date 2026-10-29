@@ -18,43 +18,37 @@ export const getMyInfo = () => {
 }
 
 export const getUserInfo = ({ userId }) => {
-  return request('GET', baseUrl + '/v1/users/' + userId).then(d => d.data)
+  // Local Supabase-backed user profile (same shape as the users API).
+  return axios.get('/api/web/users/' + userId).then(d => d.data.data);
 }
 
 export const getUserStatus = ({ userId }) => {
-  return request('GET', baseUrl + '/v1/users/' + userId + '/status').then(d => d.data)
+  return Promise.resolve({ status: '' });
 }
 
 export const updateStatus = ({ newStatus, userId }) => {
-  return request('PATCH', getFullUrl('users', '/v1/users/' + userId + '/status'), {
-    status: newStatus,
-  }).then(d => d.data)
+  return Promise.resolve({ status: newStatus });
 }
 
 export const getPreviousUsernames = async ({ userId }) => {
-  let cursor = '';
-  let names = [];
-  do {
-    let results = await request('GET', getFullUrl('users', '/v1/users/' + userId + '/username-history?limit=100&cursor=' + encodeURIComponent(cursor)));
-    results.data.data.forEach(v => names.push(v.name));
-    cursor = results.data.nextPageCursor;
-  } while (cursor !== null);
-  return names;
+  return [];
 }
 
 export const searchUsers = async ({keyword, limit, offset}) => {
-  return await request('GET', getBaseUrl() + '/search/users/results?keyword=' + (keyword||'') + '&maxRows='+limit+'&startIndex='+offset).then(d => d.data);
+  // Local Supabase-backed user search (legacy search shape the UI expects).
+  const d = await axios.get('/api/web/users?keyword=' + encodeURIComponent(keyword || '') + '&limit=' + limit + '&offset=' + offset).then(r => r.data);
+  return {
+    UserSearchResults: (d.data || []).map(v => ({
+      UserId: v.id,
+      Name: v.name,
+      UserProfilePageUrl: '/users/' + v.id + '/profile',
+    })),
+    TotalResults: d.total || 0,
+  };
 }
 
 export const getMembershipType = async ({userId}) => {
-  return request('GET', getFullUrl('premiumfeatures', '/v1/users/'+userId+'/validate-membership')).then(d => d.data).then(data => {
-    if (data === true) {
-      return 4;
-    }else if (data === false) {
-      return 0;
-    }
-    return data;
-  })
+  return 0;
 }
 
 export const getUserIdByUsername = async (username) => {

@@ -20,7 +20,7 @@ const R6 = (rect, fill, key) => (
   <rect key={key} x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx="5" fill={fill} />
 );
 
-const AvatarArt = ({ config, size = 300 }) => {
+const AvatarArt = ({ config, size = 300, viewBox, width, height }) => {
   const cfg = config || DEFAULT_AVATAR;
   const colors = { ...DEFAULT_AVATAR.bodyColors, ...(cfg.bodyColors || {}) };
   const face = cfg.faceId ? getItemById(cfg.faceId) : null;
@@ -40,9 +40,9 @@ const AvatarArt = ({ config, size = 300 }) => {
 
   return (
     <svg
-      width={size}
-      height={(size * 360) / 260}
-      viewBox="0 0 260 360"
+      width={width || size}
+      height={height || (size * 360) / 260}
+      viewBox={viewBox || '0 0 260 360'}
       style={{ display: 'block', margin: '0 auto' }}
     >
       {/* subtle floor shadow */}

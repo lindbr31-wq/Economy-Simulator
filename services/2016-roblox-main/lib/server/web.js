@@ -262,3 +262,98 @@ export const getOwnedItems = async (userId) => {
   );
   return r.rows;
 };
+
+// ---------- users / friends / presence (whole site is one big friend list) ----------
+
+export const countUsers = async (keyword = '') => {
+  const params = keyword ? [`%${keyword}%`] : [];
+  const where = keyword ? `WHERE username ILIKE $1` : '';
+  const r = await query(`SELECT count(*)::int AS n FROM "user" ${where}`, params);
+  return r.rows[0].n;
+};
+
+export const listUsers = async ({ keyword = '', limit = 12, offset = 0 } = {}) => {
+  const params = [];
+  let where = '';
+  if (keyword) {
+    params.push(`%${keyword}%`);
+    where = `WHERE username ILIKE $1`;
+  }
+  params.push(limit, offset);
+  const r = await query(
+    `SELECT id, username, description, created_at, online_at FROM "user"
+     ${where} ORDER BY username ASC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+  return r.rows.map(toPublicUser);
+};
+
+const toPublicUser = (row) => ({
+  id: Number(row.id),
+  name: row.username,
+  username: row.username,
+  displayName: row.username,
+  description: row.description || '',
+  created: row.created_at,
+  isBanned: false,
+  hasVerifiedBadge: false,
+  online_at: row.online_at,
+});
+
+export const getUserPublic = async (id) => {
+  const r = await query(`SELECT id, username, description, created_at, online_at FROM "user" WHERE id = $1`, [id]);
+  return r.rows[0] ? toPublicUser(r.rows[0]) : null;
+};
+
+// Everyone on the site is friends with everyone. Friends of X = all users but X.
+export const listFriends = async (userId) => {
+  const r = await query(
+    `SELECT id, username, description, created_at, online_at FROM "user"
+     WHERE id <> $1 AND status = 1 ORDER BY username ASC`,
+    [userId],
+  );
+  return r.rows.map(toPublicUser);
+};
+
+export const getPresence = async (userIds) => {
+  const ids = (Array.isArray(userIds) ? userIds : []).map(Number).filter((n) => Number.isInteger(n)).slice(0, 100);
+  if (ids.length === 0) return [];
+  const r = await query(`SELECT id, online_at FROM "user" WHERE id = ANY($1)`, [ids]);
+  const now = Date.now();
+  return r.rows.map((row) => {
+    const onlineAt = row.online_at ? new Date(row.online_at).getTime() : 0;
+    const isOnline = now - onlineAt < 5 * 60 * 1000;
+    return {
+      userId: Number(row.id),
+      lastLocation: isOnline ? 'Website' : '',
+      placeId: null,
+      rootPlaceId: null,
+      gameId: null,
+      universeId: null,
+      userPresenceType: isOnline ? 'Online' : 'Offline',
+      lastOnline: row.online_at || new Date().toISOString(),
+    };
+  });
+};
+
+// Equipped avatar items for the "Currently Wearing" panel.
+export const getEquippedItems = async (userId) => {
+  const avatar = await query(`SELECT config FROM web_user_avatar WHERE user_id = $1`, [userId]);
+  const cfg = avatar.rows[0] ? avatar.rows[0].config : null;
+  const ids = [];
+  if (cfg) {
+    if (cfg.faceId) ids.push(Number(cfg.faceId));
+    if (cfg.shirtId) ids.push(Number(cfg.shirtId));
+    if (cfg.pantsId) ids.push(Number(cfg.pantsId));
+    if (cfg.gearId) ids.push(Number(cfg.gearId));
+    (cfg.hatIds || []).forEach((h) => ids.push(Number(h)));
+  }
+  if (ids.length === 0) return [];
+  const r = await query(`SELECT id, name FROM web_catalog_item WHERE id = ANY($1)`, [ids]);
+  return r.rows.map((row) => ({ id: Number(row.id), name: row.name }));
+};
+
+export const getUserAvatarConfig = async (userId) => {
+  const r = await query(`SELECT config FROM web_user_avatar WHERE user_id = $1`, [userId]);
+  return r.rows[0] && r.rows[0].config && r.rows[0].config.bodyColors ? r.rows[0].config : null;
+};

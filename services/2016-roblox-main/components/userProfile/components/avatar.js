@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { createUseStyles } from "react-jss"
 import { getAvatar } from "../../../services/avatar";
 import {getItemUrl, itemNameToEncodedName} from "../../../services/catalog";
 import ItemImage from "../../itemImage";
-import PlayerImage from "../../playerImage"
 import Subtitle from "./subtitle"
 import Link from "../../link";
+
+const Avatar3D = dynamic(() => import("../../avatar3d"), { ssr: false });
 
 const useAvatarStyles = createUseStyles({
   avatarImageWrapper: {
@@ -60,7 +62,7 @@ const Avatar = props => {
     <div className='col-12 col-lg-6 pe-0'>
       <div className={'card ' + s.avatarImageCard}>
         <div className={s.avatarImageWrapper}>
-          <PlayerImage id={userId}/>
+          <Avatar3D userId={userId} height={360} />
         </div>
       </div>
     </div>
