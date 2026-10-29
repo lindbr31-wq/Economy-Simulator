@@ -86,6 +86,7 @@ const saveConfig = (config) =>
   axios.post('/api/web/user/avatar', { config }).then(d => d.data);
 
 const CATEGORY_TYPE_NAME = { hats: 'Hat', faces: 'Face', shirts: 'Shirt', pants: 'Pants', gear: 'Gear' };
+const WEARABLE_TYPE_IDS = { Hat: 41, Face: 18, Shirt: 11, Pants: 12, Gear: 19 };
 
 export const getRules = () => {
   return Promise.resolve({
@@ -120,11 +121,14 @@ export const getMyAvatar = () => {
       bodyColors[idKey] = colors[HEX_KEYS[idKey]] ? hexToBrick(colors[HEX_KEYS[idKey]]) : DEFAULT_BODY_COLOR_IDS[idKey];
     });
     return {
-      assets: (data.equipped || []).map(v => ({
-        id: v.id,
-        name: v.name,
-        assetType: v.assetType || CATEGORY_TYPE_NAME[v.category] || 'Hat',
-      })),
+      assets: (data.equipped || []).map(v => {
+        const t = v.assetType || CATEGORY_TYPE_NAME[v.category] || 'Hat';
+        return {
+          id: v.id,
+          name: v.name,
+          assetType: { id: WEARABLE_TYPE_IDS[t] || 41, name: t },
+        };
+      }),
       bodyColors,
       playerAvatarType: 'R6',
     };
