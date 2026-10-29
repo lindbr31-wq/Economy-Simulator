@@ -25,7 +25,7 @@ const mapItem = (row) => {
     id: Number(row.id),
     itemType: 'Asset',
     assetTypeId: t.assetTypeId,
-    assetType: t.assetType,
+    assetType: t.assetTypeId,
     name: row.name,
     description: row.description || '',
     creator: { id: 1, name: 'EconomySim Games', type: 'User', hasVerifiedBadge: false },
@@ -56,6 +56,8 @@ const mapGameAsPlace = (row) => ({
   id: Number(row.id),
   itemType: 'Asset',
   assetTypeId: 9,
+  assetType: 9,
+  genres: row.genre ? [row.genre] : [],
   assetType: 'Place',
   name: row.name,
   description: row.description || '',
@@ -147,11 +149,33 @@ export const getProductInfoLegacy = async (assetId) => {
   };
 }
 
+const toDetailsEntry = (item) => ({
+  ...item,
+  assetType: item.assetType,
+  creatorTargetId: (item.creator && item.creator.id) || 1,
+  creatorType: (item.creator && item.creator.type) || 'User',
+  creatorName: (item.creator && item.creator.name) || 'EconomySim Games',
+  createdAt: item.created || new Date(2016, 5, 1).toISOString(),
+  updatedAt: item.updated || item.created || new Date(2016, 5, 1).toISOString(),
+  genres: item.genres || [],
+  favoriteCount: item.favoritedCount || 0,
+  saleCount: item.sales || 0,
+  isForSale: item.isForSale !== false,
+  price: item.price !== undefined ? item.price : null,
+  priceTickets: item.priceTickets !== undefined ? item.priceTickets : null,
+  itemRestrictions: item.isLimitedUnique ? ['LimitedUnique'] : item.isLimited ? ['Limited'] : [],
+  productId: item.productId || item.id,
+  itemType: 'Asset',
+  lowestSellerData: null,
+  offsaleDeadline: null,
+  currency: item.priceType === 'Tickets' ? 2 : 1,
+});
+
 export const getItemDetails = async (assetIdArray) => {
   if (assetIdArray.length === 0) return { data: { data: [] } };
   const wanted = assetIdArray.map(Number);
   const all = (await fetchCatalogItems()).concat(await fetchGames());
-  const data = wanted.map(id => all.find(v => v.id === id)).filter(Boolean);
+  const data = wanted.map(id => all.find(v => v.id === id)).filter(Boolean).map(toDetailsEntry);
   return { data: { data } };
 }
 
