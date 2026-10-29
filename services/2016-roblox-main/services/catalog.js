@@ -58,7 +58,6 @@ const mapGameAsPlace = (row) => ({
   assetTypeId: 9,
   assetType: 9,
   genres: row.genre ? [row.genre] : [],
-  assetType: 'Place',
   name: row.name,
   description: row.description || '',
   creator: { id: 1, name: row.creator || 'EconomySim Games', type: 'User', hasVerifiedBadge: false },
