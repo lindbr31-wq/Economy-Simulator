@@ -54,7 +54,13 @@ export const takeResellableAssetOffSale = ({ assetId, userAssetId }) => {
 }
 
 export const getResaleData = ({ assetId }) => {
-  return request('GET', getFullUrl('economy', `/v1/assets/${assetId}/resale-data`)).then(d => d.data);
+  // No resale market on the self-contained site.
+  return Promise.resolve({
+    recentAveragePrice: 0,
+    priceDataPoints: [],
+    volumeDataPoints: [],
+    sales: 0,
+  });
 }
 
 export const getTransactions = ({ userId, cursor, type }) => {

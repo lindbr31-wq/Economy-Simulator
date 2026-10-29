@@ -61,10 +61,15 @@ const HEX_KEYS = {
 };
 
 const fetchOwnConfig = async () => {
-  const me = await axios.get('/api/auth/me').then(d => d.data).catch(() => null);
+  const me = await axios.get('/api/auth/me').then(d => (d.data && d.data.data) || d.data || null).catch(() => null);
   if (!me || !me.id) return null;
   const d = await axios.get('/api/web/users/' + me.id + '/avatar').then(r => r.data);
   return { me, data: d.data || {} };
+};
+
+export const getMyAvatarConfig = async () => {
+  const res = await fetchOwnConfig();
+  return (res && res.data && res.data.config) || null;
 };
 
 const configToAssetIds = (cfg) => {
@@ -106,7 +111,8 @@ export const getAvatar = ({ userId }) => {
 }
 
 export const getMyAvatar = () => {
-  return fetchOwnConfig().then(({ data }) => {
+  return fetchOwnConfig().then((res) => {
+    const data = (res && res.data) || {};
     const cfg = data.config || {};
     const colors = cfg.bodyColors || {};
     const bodyColors = {};

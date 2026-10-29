@@ -181,12 +181,23 @@ export const getItemDetails = async (assetIdArray) => {
 
 export const getRecommendations = ({ assetId, assetTypeId, limit }) => {
   return fetchCatalogItems().then(items => ({
-    data: items.filter(v => v.id !== Number(assetId)).slice(0, Number(limit) || 6),
+    data: items.filter(v => v.id !== Number(assetId)).slice(0, Number(limit) || 6).map(v => ({
+      item: {
+        assetId: v.id,
+        name: v.name,
+        assetType: v.assetType,
+      },
+      creator: {
+        creatorId: (v.creator && v.creator.id) || 1,
+        creatorType: (v.creator && v.creator.type) || 'User',
+        name: (v.creator && v.creator.name) || 'EconomySim Games',
+      },
+    })),
   }));
 }
 
 export const getComments = async ({ assetId, offset }) => {
-  return { data: { data: [], totalRows: 0 } };
+  return { Comments: [], MaxRows: 0, AreCommentsDisabled: false };
 }
 
 export const createComment = async ({ assetId, comment }) => {

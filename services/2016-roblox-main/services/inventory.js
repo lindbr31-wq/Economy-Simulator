@@ -65,9 +65,9 @@ export const getCollections = ({ userId }) => {
 }
 
 export const getCollectibleInventory = ({ userId, cursor, limit, assetTypeId = 'null' }) => {
-  return request('GET', getFullUrl('inventory', `/v1/users/${userId}/assets/collectibles?cursor=${encodeURIComponent(cursor || '')}&limit=${limit}&assetType=${assetTypeId}`)).then(d => d.data);
+  return Promise.resolve({ data: [], nextPageCursor: null, previousPageCursor: null });
 }
 
 export const getCollectibleOwners = ({ assetId, limit, sort, cursor }) => {
-  return request('GET', getFullUrl('inventory', `/v2/assets/${assetId}/owners?cursor=${encodeURIComponent(cursor || '')}&limit=${limit}&sortOrder=${sort}`)).then(d => d.data);
+  return Promise.resolve({ data: [], nextPageCursor: null, previousPageCursor: null });
 }

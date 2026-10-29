@@ -7,7 +7,16 @@ const baseUrl = getFullUrl('users', '');
 export const getMyInfo = () => {
   // Prefer the local session (Supabase-backed login). If there is none but a
   // legacy .ROBLOSECURITY cookie login was used, fall back to the backend.
-  return axios.get('/api/auth/me').then(d => d.data).catch(err => {
+  return axios.get('/api/auth/me').then(d => {
+    const u = (d.data && d.data.data) || d.data || {};
+    return {
+      id: u.id,
+      name: u.name || u.username,
+      username: u.username,
+      isStaff: !!u.isStaff,
+      description: u.description || '',
+    };
+  }).catch(err => {
     const status = err.response && err.response.status;
     const hasLegacySession = typeof document !== 'undefined' && document.cookie.indexOf('has_legacy_session=1') !== -1;
     if (status === 401 && hasLegacySession) {
