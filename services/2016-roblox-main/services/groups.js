@@ -1,7 +1,7 @@
 import request, { getFullUrl } from "../lib/request"
 
 export const getUserGroups = ({ userId }) => {
-  return request('GET', getFullUrl('groups', `/v1/users/${userId}/groups/roles`)).then(d => d.data.data);
+  return Promise.resolve([]);
 }
 
 export const getPermissionsForRoleset = ({ groupId, rolesetId }) => {

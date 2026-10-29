@@ -21,7 +21,7 @@ export const declineTrade = ({ tradeId }) => {
  * @returns {Promise<number>}
  */
 export const getInboundTradeCount = () => {
-  return request('GET', getFullUrl('trades', `/v1/trades/inbound/count`)).then(d => d.data.count);
+  return Promise.resolve(0);
 }
 
 export const createTrade = ({ offerRobux, requestRobux, offerUserAssets, requestUserAssets, offerUserId, requestUserId }) => {

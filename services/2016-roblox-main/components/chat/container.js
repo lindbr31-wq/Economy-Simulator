@@ -8,7 +8,12 @@ import {getFriends} from "../../services/friends";
 import ConversationEntry from "./components/conversationEntry";
 import * as signalR from "@microsoft/signalr";
 import getFlag from "../../lib/getFlag";
+import config from "../../lib/config";
 const useSignalCoreForRealTimeChat = getFlag('useSignalCoreForRealTimeChat', false);
+// Chat hub URL. Defaults to "/chat" (same origin, works when the chat hub is
+// reverse-proxied alongside the site); set backend.chatUrl / BACKEND_CHAT_URL
+// to an absolute URL when the hub lives on another host (e.g. on Vercel).
+const chatUrl = config.publicRuntimeConfig.backend.chatUrl || '/chat';
 
 const ConversationContainer = props => {
   const store = chatStore.useContainer();
@@ -104,7 +109,7 @@ const ChatContainer = props => {
         }
       }
       console.log('[info] signalr creating connection');
-      const connection = new signalR.HubConnectionBuilder().withUrl("/chat").build();
+      const connection = new signalR.HubConnectionBuilder().withUrl(chatUrl).build();
       connection.on('ChatTyping', data => onChatTyping(JSON.parse(data)));
       connection.on('ChatConversationAdded', data => onChatConversationAdded(JSON.parse(data)));
       connection.on("ChatMessageReceived", data => onChatMessageReceived(JSON.parse(data)));

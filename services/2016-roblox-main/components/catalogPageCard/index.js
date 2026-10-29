@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import React, {useEffect, useRef, useState} from "react";
 import { createUseStyles } from "react-jss";
+import dynamic from "next/dynamic";
 import getFlag from "../../lib/getFlag";
 import { getBaseUrl } from "../../lib/request";
 import {getItemUrl, itemNameToEncodedName} from "../../services/catalog";
@@ -10,6 +11,8 @@ import NewOverlay from "../catalogOverlays/new";
 import SaleOverlay from "../catalogOverlays/sale";
 import TimerOverlay from "../catalogOverlays/timer";
 import CreatorLink from "../creatorLink";
+
+const ItemPreview3D = dynamic(() => import("../itemPreview3d"), { ssr: false });
 import Robux from "../robux";
 import thumbnailStore from "../../stores/thumbnailStore";
 import Link from "../link";
@@ -176,11 +179,7 @@ const CatalogPageCard = props => {
           <div style={{ zIndex: showDetails ? 10 : 0, position: 'relative' }}>
             {isTimedItem ? <TimerOverlay/> : null}
             {isNew ? <NewOverlay/> : isSale ? <SaleOverlay/> : null}
-            <img alt={props.name} src={image} className={`${s.image} ${props.mode === 'large' ? s.imageBig : s.imageSmall}`} onError={e => {
-              if (e.currentTarget.src !== thumbs.getPlaceholder()) {
-                setImage(thumbs.getPlaceholder());
-              }
-            }}/>
+            <ItemPreview3D id={props.id} height={isLarge ? 210 : 148} />
             {isLimited ? <LimitedOverlay/> : null}
             {isLimitedU ? <LimitedUniqueOverlay/> : null}
             <div className={s.overviewDetails} style={hasBottomOverlay ? { marginTop: '-18px' } : undefined}>

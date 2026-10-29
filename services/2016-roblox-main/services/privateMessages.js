@@ -35,5 +35,5 @@ export const toggleArchiveStatus = ({ messageIds, isArchived }) => {
  * @returns {Promise<number>}
  */
 export const getUnreadMessageCount = () => {
-  return request('GET', getFullUrl('privatemessages', `/v1/messages/unread/count`)).then(d => d.data.count);
+  return Promise.resolve(0);
 }

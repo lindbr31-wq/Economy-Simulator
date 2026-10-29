@@ -18,12 +18,28 @@ const UrlUtilities = (() => {
       throw new Error('Unsupported domain type: ' + baseDomainParsed.type);
     }
   }
-  const baseWithDomainAndTld = getDomainFromUrl(getBaseUrl()).toLowerCase();
+  const allowedDomains = new Set([getDomainFromUrl(getBaseUrl()).toLowerCase()]);
+  // Also allow the host that apiFormat actually targets, so the backend can
+  // live on a different domain than the website (e.g. backend.example.com
+  // with the site on www.example.com or on Vercel).
+  const apiFormat = getConfig().publicRuntimeConfig.backend.apiFormat;
+  if (typeof apiFormat === 'string') {
+    try {
+      const apiUrl = apiFormat.replace(/\{0\}/g, 'api').replace(/\{1\}/g, '');
+      const parsed = parseDomain(fromUrl(apiUrl));
+      if (parsed.type === ParseResultType.Listed || parsed.type === ParseResultType.Ip || parsed.type === ParseResultType.Reserved) {
+        allowedDomains.add(getDomainFromUrl(apiUrl).toLowerCase());
+      }
+    } catch (e) {
+      // apiFormat does not have to be a valid URL (e.g. missing in tests); fall
+      // back to only allowing the base URL domain.
+    }
+  }
 
   return {
     isSafe: (rawUrl) => {
       const parsedWithDomainAndTld = getDomainFromUrl(rawUrl).toLowerCase();
-      return parsedWithDomainAndTld === baseWithDomainAndTld;
+      return allowedDomains.has(parsedWithDomainAndTld);
     },
   }
 })();
@@ -67,12 +83,23 @@ const actualHandler = async (req, res) => {
     for (const item of Object.getOwnPropertyNames(result.headers)) {
       let value = result.headers[item];
       if (item === 'set-cookie') {
-        // TODO: "localhost" needs to be configurable
+        // Cookies coming back from the backend carry a Domain= attribute for the
+        // backend's domain. Rewrite it so the cookie is scoped to this site
+        // (e.g. *.vercel.app). Set COOKIE_DOMAIN_REWRITE / backend.cookieDomainRewrite
+        // to a specific domain, or leave it unset to strip the attribute
+        // entirely (host-only cookies, which is correct on Vercel).
+        const rewriteDomain = getConfig().publicRuntimeConfig.backend.cookieDomainRewrite;
+        const fixCookie = (v) => {
+          if (typeof rewriteDomain === 'string' && rewriteDomain.length > 0) {
+            return v.replace(/(;\s*domain=)([^;]+)/i, `$1${rewriteDomain}`);
+          }
+          return v.replace(/;\s*domain=[^;]+/i, '');
+        };
         if (typeof value === 'string') {
-          value = value.replace(/roblox\.com/g, 'localhost');
+          value = fixCookie(value);
         } else {
           value.forEach((v, i, arr) => {
-            arr[i] = v.replace(/roblox\.com/g, 'localhost');
+            arr[i] = fixCookie(v);
           });
         }
       }

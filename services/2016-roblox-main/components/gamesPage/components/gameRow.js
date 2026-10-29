@@ -133,7 +133,7 @@ const GameRow = props => {
       }
       <div className={'row ' + s.gameRow} ref={gameRowRef}>
         {
-          props.games.slice(offset, offset+100).map((v, i) => {
+          (props.games || []).slice(offset, offset+100).map((v, i) => {
             return <SmallGameCard
               key={i}
               className={s.gameCard}

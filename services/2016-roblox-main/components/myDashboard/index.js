@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Link from 'next/link';
 import { createUseStyles } from "react-jss";
 import getFlag from "../../lib/getFlag";
 import { getFriends } from "../../services/friends";
@@ -105,7 +106,7 @@ const MyDashboard = props => {
     })
   }, []);
 
-  if (!auth.userId) return null;
+  if (!auth.userId && auth.isPending) return null;
   return <div className={'container ' + s.container}>
     <div className='row'>
       <div className='d-none d-lg-flex col-2'><AdSkyscraper context='dashboard-left' /></div>
@@ -113,14 +114,17 @@ const MyDashboard = props => {
         <div className='row'>
           <div className='col-3'>
             <div className={s.headshotWrapper}>
-              <PlayerHeadshot id={auth.userId} name={auth.username} />
+              {auth.userId ? <PlayerHeadshot id={auth.userId} name={auth.username} /> : null}
             </div>
           </div>
           <div className='col-9'>
-            <h3 className={s.helloMessage}>Hello, {auth.username}!</h3>
+            <h3 className={s.helloMessage}>{auth.userId ? `Hello, ${auth.username}!` : 'Welcome to Economy Simulator!'}</h3>
+            {!auth.userId ? <p style={{ fontSize: '16px', color: '#666' }}>
+              <Link href='/Login/Signup.aspx'><a>Sign up</a></Link> or <Link href='/Login/Auth.aspx'><a>log in</a></Link> to customize your avatar, play games, and hang out with friends.
+            </p> : null}
           </div>
         </div>
-        {friends && <div className='row mt-4'>
+        {friends && auth.userId && <div className='row mt-4'>
           <div className='col-12'>
             <h3 className={s.subHeader}>Friends ({friends.length})</h3>
             <div className={'card pt-3 pb-3 ps-3 pe-2 ' + s.card}>

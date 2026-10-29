@@ -45,12 +45,8 @@ const csrfValid = (req) => {
 }
 
 export default function handler(req, res) {
-  if (!getFlag('requireLoginThroughCookie', true)) {
-    res.status(500).json({
-      success: false,
-    });
-    return
-  }
+  // Cookie login is optional (advanced), not required: username/password login
+  // goes through /api/auth/login instead.
   if (!csrfValid(req)) {
     const newCsrf = generateCsrf();
     res.setHeader('Set-Cookie', `.LoginCSRF=${newCsrf.signed}; Max-Age=${300}; Path=/; HttpOnly`);
@@ -69,7 +65,9 @@ export default function handler(req, res) {
       return;
     }
     const setCookieRequest = `.ROBLOSECURITY=${cookie}; Max-Age=${86400 * 365}; Path=/; HttpOnly; SameSite=Lax`;
-    res.setHeader('Set-Cookie', setCookieRequest);
+    // Non-HttpOnly marker so the client knows to fall back to the backend for
+    // "who am I" when there is no local session cookie.
+    res.setHeader('Set-Cookie', [setCookieRequest, 'has_legacy_session=1; Max-Age=86400; Path=/; SameSite=Lax']);
     res.status(200).json({
       success: true,
     });

@@ -3,9 +3,7 @@ import { createUseStyles } from "react-jss";
 import { login } from "../../../services/auth";
 import useButtonStyles from "../../../styles/buttonStyles";
 import ActionButton from "../../actionButton";
-import getFlag from "../../../lib/getFlag";
 import GetCookie from "./getCookie";
-const loginThroughCookieRequired = getFlag('requireLoginThroughCookie', true);
 import axios from 'axios';
 
 const useStyles = createUseStyles({
@@ -26,9 +24,14 @@ const useStyles = createUseStyles({
     },
     loginWrapper: {
         maxWidth: '325px',
-    }
+    },
+    toggleLink: {
+        fontSize: '12px',
+    },
 });
 
+// Legacy .ROBLOSECURITY cookie login (optional/advanced). We use an api
+// instead of document.cookie so that the cookie can be httponly.
 const sendLoginRequest = async (value) => {
     let csrf = '';
     let csrfRetires = 0;
@@ -68,11 +71,14 @@ const LoginArea = props => {
     const [locked, setLocked] = useState(false);
     const [feedback, setFeedback] = useState(null);
     const [showCookieTutorial, setShowCookieTutorial] = useState(false);
+    // Username+password login is the default; .ROBLOSECURITY cookie login is
+    // still available as an advanced option.
+    const [useCookie, setUseCookie] = useState(false);
 
     const onLoginClick = e => {
         setFeedback(null);
-        if (loginThroughCookieRequired || cookieRef.current.value) {
-            let value = cookieRef.current.value.trim();
+        if (useCookie) {
+            let value = (cookieRef.current.value || '').trim();
             if (value.startsWith('.ROBLOSECURITY=')) {
                 value = value.slice(15);
             }
@@ -81,9 +87,11 @@ const LoginArea = props => {
                 return;
             }
             setLocked(true);
-            // We use an api instead of document.cookie so that it can be httponly
             sendLoginRequest(value).then(() => {
                 window.location.href = '/home';
+            }).catch(e => {
+                setFeedback(e.response?.data?.message || e.message);
+                setLocked(false);
             })
             return;
         }
@@ -110,9 +118,9 @@ const LoginArea = props => {
             {feedback && <p className='mb-2 mt-1 text-danger'>{feedback}</p>}
         </div>
         <div className='col-12'>
-            <div className={'ms-4 me-4 ' + s.loginWrapper + ' ' + (loginThroughCookieRequired ? s.loginWrapperCookie : '')}>
+            <div className={'ms-4 me-4 ' + s.loginWrapper}>
                 {
-                    loginThroughCookieRequired ? <>
+                    useCookie ? <>
                         <div>
                             <p className='fw-bold me-4 mb-0'>.ROBLOSECURITY Cookie:</p>
                             <p className='mb-2'>
@@ -126,6 +134,15 @@ const LoginArea = props => {
                         </div>
                         <div>
                             <textarea disabled={locked} rows={7} className='w-100' ref={cookieRef} />
+                        </div>
+                        <div className='mt-1'>
+                            <a href='#' className={s.toggleLink} onClick={e => {
+                                e.preventDefault();
+                                setUseCookie(false);
+                                setFeedback(null);
+                            }}>
+                                &laquo; Login with username and password instead
+                            </a>
                         </div>
                     </> : <>
                         <div>
@@ -143,6 +160,15 @@ const LoginArea = props => {
                             <div className={s.input}>
                                 <input disabled={locked} type='password' className='w-100' ref={passwordRef}></input>
                             </div>
+                        </div>
+                        <div className='mt-1'>
+                            <a href='#' className={s.toggleLink} onClick={e => {
+                                e.preventDefault();
+                                setUseCookie(true);
+                                setFeedback(null);
+                            }}>
+                                Login with a .ROBLOSECURITY cookie instead
+                            </a>
                         </div>
                     </>
                 }

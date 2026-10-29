@@ -1,16 +1,19 @@
 import request from "../lib/request"
 import { getFullUrl } from "../lib/request";
+import axios from "axios";
 
+// Local (Supabase-backed) auth: username + password login sets an HttpOnly
+// session cookie - no .ROBLOSECURITY cookie required.
 export const login = ({ username, password }) => {
-  return request('POST', getFullUrl('auth', '/v2/login'), {
-    ctype: 'username',
-    cvalue: username,
-    password,
-  });
+  return axios.post('/api/auth/login', { username, password }).then(d => d.data);
+}
+
+export const register = ({ username, password }) => {
+  return axios.post('/api/auth/register', { username, password }).then(d => d.data);
 }
 
 export const logout = () => {
-  return request('POST', getFullUrl('auth', '/v2/logout'), {});
+  return axios.post('/api/auth/logout', {}).then(d => d.data);
 }
 
 export const changePassword = ({ existingPassword, newPassword }) => {

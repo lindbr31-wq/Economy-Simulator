@@ -22,7 +22,7 @@ const SignUpArea = props => {
             <p className={s.notAMemberText}>Not a member?</p>
             <h2 className={s.header}>Sign Up to Build & Make Friends</h2>
             <ActionButton label='Sign Up' onClick={(e) => {
-                window.location.href = '/account/signupredir';
+                window.location.href = '/signup';
             }}></ActionButton>
         </div>
     </div>

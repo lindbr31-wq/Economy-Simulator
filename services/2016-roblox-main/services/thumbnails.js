@@ -16,7 +16,13 @@ const addBaseUrl = (arrayOfThumbs) => {
 }
 
 export const multiGetUserThumbnails = ({ userIds, size = '420x420', format = 'png' }) => {
-  return request('GET', getFullUrl('thumbnails', `/v1/users/avatar?userIds=${toCsv(userIds)}&size=${size}&format=${format}`)).then(d => d.data.data).then(addBaseUrl);
+  // Local avatar images rendered server-side as SVG (full body).
+  const ids = [...new Set(userIds.map(v => parseInt(v, 10)))].filter(v => Number.isInteger(v));
+  return Promise.resolve(ids.map(id => ({
+    targetId: id,
+    state: 'Completed',
+    imageUrl: '/api/web/users/' + id + '/image?type=avatar',
+  })));
 }
 
 let _multiGetHeadshotsMeta = {
@@ -29,55 +35,13 @@ let _multiGetHeadshotsMeta = {
 }
 
 export const multiGetUserHeadshots = ({ userIds, size = '420x420', format = 'png' }) => {
-  userIds = [... new Set(userIds)];
-  let results = [];
-  let toRemove = [];
-  for (const id of userIds) {
-    const key = `${id} ${size} ${format}`;
-    const exists = _multiGetHeadshotsMeta.cache[key];
-    if (exists) {
-      results.push({
-        imageUrl: exists,
-        state: 'Completed',
-        targetId: typeof id === 'string' ? parseInt(id, 10) : id,
-      });
-      toRemove.push(id);
-    }
-  }
-  userIds = userIds.filter(v => toRemove.includes(v) === false);
-  if (userIds.length === 0) {
-    return new Promise((res) => res(results));
-  }
-  if (_multiGetHeadshotsMeta.pending.length !== 0) {
-    clearTimeout(_multiGetHeadshotsMeta.timer);
-  }
-  userIds.forEach(v => {
-    _multiGetHeadshotsMeta.pending.push(v);
-  });
-  // @ts-ignore
-  _multiGetHeadshotsMeta.timer = setTimeout(() => {
-    console.debug('[info] Make avatar/headshot request');
-    const { pending, onFinish } = _multiGetHeadshotsMeta;
-    _multiGetHeadshotsMeta.onFinish = [];
-    _multiGetHeadshotsMeta.pending = [];
-    _multiGetHeadshotsMeta.timer = 0;
-    request('GET', getFullUrl('thumbnails', `/v1/users/avatar-headshot?userIds=${toCsv(pending)}&size=${size}&format=${format}`)).then(d => d.data.data).then(addBaseUrl).then(finalResults => {
-      finalResults = addBaseUrl(finalResults);
-      for (const item of finalResults) {
-        const imageUrl = item.imageUrl;
-        if (typeof imageUrl !== 'string') continue;
-        _multiGetHeadshotsMeta.cache[`${item.targetId} ${size} ${format}`] = imageUrl;
-      }
-      onFinish.forEach(v => {
-        v(finalResults);
-      })
-    });
-  }, 50);
-  return new Promise((res, rej) => {
-    _multiGetHeadshotsMeta.onFinish.push((data) => {
-      res(data);
-    });
-  });
+  // Local avatar headshots rendered server-side as SVG.
+  const ids = [...new Set(userIds.map(v => parseInt(v, 10)))].filter(v => Number.isInteger(v));
+  return Promise.resolve(ids.map(id => ({
+    targetId: id,
+    state: 'Completed',
+    imageUrl: '/api/web/users/' + id + '/image?type=headshot',
+  })));
 }
 
 export const multiGetOutfitThumbnails = ({ userOutfitIds, size = '420x420', format = 'png' }) => {
@@ -89,24 +53,21 @@ export const multiGetGroupIcons = ({ groupIds }) => {
 }
 
 export const multiGetAssetThumbnails = ({ assetIds }) => {
-  return request('get', getFullUrl('thumbnails', `/v1/assets?assetIds=${toCsv(assetIds)}&format=png&size=420x420`)).then(d => d.data.data).then(addBaseUrl);
+  // Local catalog item icons rendered server-side as SVG.
+  const ids = [...new Set((assetIds || []).map(v => parseInt(v, 10)))].filter(v => Number.isInteger(v));
+  return Promise.resolve(ids.map(id => ({
+    targetId: id,
+    state: 'Completed',
+    imageUrl: '/api/web/items/' + id + '/icon',
+  })));
 }
 
 export const multiGetUniverseIcons = ({ universeIds, size }) => {
-  let all = [];
-  let c = chunk(universeIds, 100);
-  for (const item of c) {
-    all.push(request('get', getFullUrl('thumbnails', `/v1/games/icons?size=${size}&format=png&universeIds=${toCsv(item)}`)).then(d => d.data.data).then(addBaseUrl))
-  }
-  return Promise.all(all).then(d => {
-    let arr = []
-    d.forEach(v => {
-      v.forEach(x => {
-        arr.push(x);
-      })
-    })
-    return arr
-  }).then(d => {
-    return d;
-  })
+  // Local game thumbnails rendered server-side as SVG.
+  const ids = [...new Set((universeIds || []).map(v => parseInt(v, 10)))].filter(v => Number.isInteger(v));
+  return Promise.resolve(ids.map(id => ({
+    targetId: id,
+    state: 'Completed',
+    imageUrl: '/api/web/games/' + id + '/icon',
+  })));
 }

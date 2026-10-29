@@ -1,7 +1,13 @@
-import request, { getFullUrl } from "../lib/request"
+import axios from "axios";
+
+// Friends for the self-contained site: every user on the site is your friend.
+// These keep the shapes the 2016 UI components expect, backed by /api/web.
+
+const allFriends = ({ userId } = {}) =>
+  axios.get('/api/web/friends' + (userId ? '?userId=' + userId : '')).then(d => d.data);
 
 export const getFriends = ({ userId }) => {
-  return request('GET', getFullUrl('friends', `/v1/users/${userId}/friends`)).then(d => d.data.data);
+  return allFriends({ userId }).then(d => d.data);
 }
 
 /**
@@ -9,76 +15,64 @@ export const getFriends = ({ userId }) => {
  * @returns {Promise<number>}
  */
 export const getFriendRequestCount = () => {
-  return request('GET', getFullUrl('friends', `/v1/user/friend-requests/count`)).then(d => d.data.count);
+  return Promise.resolve(0);
 }
 
 /**
  * @returns {Promise<number>}
  */
 export const getFollowersCount = ({ userId }) => {
-  return request('GET', getFullUrl('friends', `/v1/users/${userId}/followers/count`)).then(d => d.data.count);
+  return allFriends({ userId }).then(d => ({ count: d.total || 0 }));
 }
 
 export const getFollowers = ({ userId, cursor, limit, sort = 'Asc' }) => {
-  return request('GET', getFullUrl('friends', `/v1/users/${userId}/followers?cursor=${encodeURIComponent(cursor || '')}&sort=${sort}&limit=${limit}`)).then(d => d.data);
+  return allFriends({ userId }).then(d => ({ data: d.data, nextPageCursor: null }));
 }
 
 /**
  * @returns {Promise<number>}
  */
 export const getFollowingsCount = ({ userId }) => {
-  return request('GET', getFullUrl('friends', `/v1/users/${userId}/followings/count`)).then(d => d.data.count);
+  return allFriends({ userId }).then(d => ({ count: d.total || 0 }));
 }
 
 export const getFollowings = ({ userId, cursor, limit, sort = 'Asc' }) => {
-  return request('GET', getFullUrl('friends', `/v1/users/${userId}/followings?cursor=${encodeURIComponent(cursor || '')}&sort=${sort}&limit=${limit}`)).then(d => d.data);
+  return allFriends({ userId }).then(d => ({ data: d.data, nextPageCursor: null }));
 }
 
 /**@returns {Promise<string>} */
 export const getFriendStatus = ({ authenticatedUserId, userId }) => {
-  return request('GET', getFullUrl('friends', `/v1/users/${authenticatedUserId}/friends/statuses?userIds=${userId}`)).then(d => d.data.data[0].status);
+  return Promise.resolve('Friends');
 }
 
 export const getFriendRequests = ({cursor, limit}) => {
-  return request('GET', getFullUrl('friends', `/v1/my/friends/requests?limit=${limit}&cursor=${cursor}`)).then(d => d.data);
+  return Promise.resolve({ data: [], nextPageCursor: null });
 }
 
 export const unfriendUser = ({ userId }) => {
-  return request('POST', getFullUrl('friends', `/v1/users/${userId}/unfriend`));
+  return Promise.resolve(); // everyone stays friends on this site
 }
 
 export const acceptFriendRequest = ({ userId }) => {
-  return request('POST', getFullUrl('friends', `/v1/users/${userId}/accept-friend-request`));
-}
-
-export const declineFriendRequest = ({ userId }) => {
-  return request('POST', getFullUrl('friends', `/v1/users/${userId}/decline-friend-request`));
+  return Promise.resolve();
 }
 
 export const sendFriendRequest = ({ userId }) => {
-  return request('POST', getFullUrl('friends', `/v1/users/${userId}/request-friendship`));
+  return Promise.resolve();
+}
+
+export const declineFriendRequest = ({ userId }) => {
+  return Promise.resolve();
 }
 
 export const followUser = ({ userId }) => {
-  return request('POST', getFullUrl('friends', `/v1/users/${userId}/follow`));
+  return Promise.resolve();
 }
 
 export const unfollowUser = ({ userId }) => {
-  return request('POST', getFullUrl('friends', `/v1/users/${userId}/unfollow`));
+  return Promise.resolve();
 }
 
-export const getFollowingStatus = ({ userIds }) => {
-  return request('POST', getFullUrl('friends', `/v1/user/following-exists`), {
-    targetUserIds: userIds,
-  }).then(d => d.data.followings);
-}
-
-/**
- * Get if the authenticated user is following the provided userId
- * @returns {Promise<boolean>}
- */
 export const isAuthenticatedUserFollowingUserId = ({ userId }) => {
-  return getFollowingStatus({ userIds: [userId] }).then(result => {
-    return result[0] && result[0].isFollowing || false;
-  });
+  return Promise.resolve(true);
 }

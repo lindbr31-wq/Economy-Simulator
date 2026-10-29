@@ -42,7 +42,7 @@ const AssetPage = props => {
       assetId: assetId,
       name: name,
     });
-    if (typeof window !== 'undefined' && window.location.href !== expectedUrl) {
+    if (typeof window !== 'undefined' && window.location.pathname !== expectedUrl) {
       router.push(expectedUrl);
       return true;
     }

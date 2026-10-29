@@ -11,6 +11,9 @@ const getBaseUrl = () => {
 }
 
 const getUrlWithProxy = (url) => {
+  // Same-origin API routes (e.g. /api/web/...) must not go through the CORS
+  // proxy — a server-side fetch of a relative URL fails and the call dies.
+  if (typeof url === 'string' && url.startsWith('/')) return url;
   if (config.publicRuntimeConfig.backend.proxyEnabled)
     return '/api/proxy?url=' + encodeURIComponent(url);
   return url;
