@@ -1,6 +1,20 @@
-import { getGame, submitScore, clampScore, getSessionUser } from '../../../../../lib/server/web';
+import { getGame, submitScore, clampScore, getSessionUser, getTopScores } from '../../../../../lib/server/web';
 
 export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    try {
+      const id = Number(req.query.id);
+      const game = await getGame(id);
+      if (!game) return res.status(404).json({ errors: [{ message: 'Game not found' }] });
+      const rows = await getTopScores(id, 10);
+      return res.status(200).json({
+        data: rows.map(r => ({ username: r.username, score: Number(r.score) })),
+      });
+    } catch (e) {
+      console.error('[web] score list error', e);
+      return res.status(500).json({ errors: [{ message: 'Something went wrong' }] });
+    }
+  }
   if (req.method !== 'POST') return res.status(405).json({ errors: [{ message: 'Method not allowed' }] });
   try {
     const user = await getSessionUser(req);

@@ -154,4 +154,4 @@ export const BODY_COLOR_PALETTE = [
   '#3fc1c9', '#b072e8',
 ];
 
-export const STARTER_WALLET = { robux: 100, tix: 2500 };
+export const STARTER_WALLET = { robux: 5000, tix: 5000 };

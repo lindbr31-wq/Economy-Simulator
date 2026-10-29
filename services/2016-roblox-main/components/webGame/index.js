@@ -15,7 +15,7 @@ const H = 450;
 // The web game client: canvas + input + HUD + pause/game-over flow.
 // No game server - the game loop runs entirely in the browser and scores
 // are handed to the page via onSubmitScore (Supabase or localStorage).
-const GamePlayer = ({ game, onSubmitScore, onPlayed }) => {
+const GamePlayer = ({ game, onSubmitScore, onPlayed, onScoreChange, onEscape }) => {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
   const inputRef = useRef(null);
@@ -40,10 +40,12 @@ const GamePlayer = ({ game, onSubmitScore, onPlayed }) => {
     setScore: (n) => {
       scoreRef.current = n;
       setScore(n);
+      if (onScoreChange) onScoreChange(n);
     },
     addScore: (n) => {
       scoreRef.current += n;
       setScore(scoreRef.current);
+      if (onScoreChange) onScoreChange(scoreRef.current);
     },
     setLives: (n) => setLives(n),
     gameOver: () => {
@@ -116,6 +118,11 @@ const GamePlayer = ({ game, onSubmitScore, onPlayed }) => {
     const onKeyDown = (e) => {
       const k = keymap[e.key];
       if (!k) {
+        if (e.key === 'Escape' && onEscape) {
+          e.preventDefault();
+          onEscape();
+          return;
+        }
         if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
           if (stateRef.current === 'playing') setStateBoth('paused');
           else if (stateRef.current === 'paused') setStateBoth('playing');

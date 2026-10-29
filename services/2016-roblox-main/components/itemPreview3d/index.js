@@ -205,7 +205,9 @@ const buildItemGroup = (item) => {
 const ItemPreview3D = ({ item, id, height = 150, autoRotate = true }) => {
   const mountRef = useRef(null);
   const stateRef = useRef(null);
+  const resolvedRef = useRef(item || null);
   const [resolved, setResolved] = useState(item || null);
+  resolvedRef.current = resolved || resolvedRef.current;
 
   useEffect(() => {
     if (item || !id) return;
@@ -253,7 +255,7 @@ const ItemPreview3D = ({ item, id, height = 150, autoRotate = true }) => {
           }
         });
       }
-      state.group = buildItemGroup(resolved || { art: {}, category: 'hats' });
+      state.group = buildItemGroup(resolvedRef.current || { art: {}, category: 'hats' });
       scene.add(state.group);
     };
     rebuild();

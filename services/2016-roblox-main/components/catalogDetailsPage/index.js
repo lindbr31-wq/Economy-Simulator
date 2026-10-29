@@ -86,7 +86,12 @@ const CatalogDetails = props => {
   }, [props]);
 
   useEffect(() => {
-    if (!authStore.userId || !store.details) {
+    if (!store.details) {
+      return;
+    }
+    if (!authStore.userId) {
+      // Logged-out visitors can still see (and be prompted to buy) items.
+      store.setOwnedCopies([]);
       return;
     }
     store.loadOwnedCopies(authStore.userId);

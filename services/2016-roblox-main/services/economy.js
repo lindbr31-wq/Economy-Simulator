@@ -9,7 +9,10 @@ export const getResellers = ({ assetId, cursor, limit }) => {
 
 export const getRobux = ({ userId }) => {
   // Local Supabase-backed wallet (feeds the navbar R$/Tix counters).
-  return request('GET', '/api/web/economy').then(d => d.data);
+  return request('GET', '/api/web/economy').then(d => {
+    const w = (d.data && d.data.data) || d.data || {};
+    return { robux: w.robux || 0, tickets: w.tix || 0, tix: w.tix || 0 };
+  });
 }
 
 export const getRobuxGroup = ({ groupId }) => {
