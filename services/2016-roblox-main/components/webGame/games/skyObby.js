@@ -1,256 +1,252 @@
-// Sky Obby: Tower Trials - endless vertical platformer.
-// Pure canvas + math, no game server. Scores are submitted by the client shell.
+import * as THREE from 'three';
+
+// Sky Obby: Tower Trials — 3D. Run and jump up floating platforms,
+// collect coins, reach the flags, do not fall. (R6 blocky character!)
 
 const W = 800;
 const H = 450;
-const GRAVITY = 2100;
-const JUMP_V = -800;
-const MOVE_SPEED = 290;
-const PLAYER_W = 28;
-const PLAYER_H = 36;
+const GRAVITY = -22;
+const MOVE_SPEED = 6.2;
+const JUMP_V = 10.2;
 
-const rand = (a, b) => a + Math.random() * (b - a);
+const SKIN = 0xf5cd30;
+const SHIRT = 0x0d69ac;
+const PANTS = 0x4b974b;
 
-export default function createSkyObby(api) {
-  let player, platforms, coins, camY, startY, lives, coinsTaken, deadTimer, lastPlatform;
+const makeCharacter = () => {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+  const box = (w, h, d, c, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  box(0.95, 1, 1, PANTS, -0.5, 0.5, 0); // legs
+  box(0.95, 1, 1, PANTS, 0.5, 0.5, 0);
+  box(2, 1, 1, SHIRT, 0, 1.5, 0); // torso
+  box(0.95, 1, 1, SHIRT, -1.475, 1.5, 0); // arms
+  box(0.95, 1, 1, SHIRT, 1.475, 1.5, 0);
+  box(1.5, 1.2, 1.2, SKIN, 0, 2.6, 0); // head
+  return g;
+};
 
-  const makePlatform = (x, y, w, type) => ({
-    x, y, w, h: 18, type, vx: type === 'moving' ? (Math.random() < 0.5 ? -1 : 1) * rand(50, 110) : 0,
-    fadeState: 'solid', fadeT: 0, touched: false,
-  });
+export default function createSkyObby(api, canvas) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(W, H);
+  renderer.setClearColor(0xbfe3f5, 1);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xbfe3f5, 30, 90);
 
-  const generateTo = (targetY) => {
-    let last = platforms[platforms.length - 1];
-    while (last.y > targetY) {
-      const gap = rand(70, 115);
-      const w = rand(100, 180);
-      const x = rand(16, W - w - 16);
-      const y = last.y - gap;
-      const r = Math.random();
-      const type = r < 0.16 ? 'moving' : r < 0.28 ? 'fade' : 'static';
-      const p = makePlatform(x, y, w, type);
-      platforms.push(p);
-      if (Math.random() < 0.32) {
-        coins.push({ x: x + w / 2, y: y - 26, taken: false, t: Math.random() * Math.PI * 2 });
-      }
-      last = p;
+  const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 200);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x88aacc, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  sun.position.set(10, 30, 15);
+  scene.add(sun);
+
+  // world state
+  let platforms = []; // {mesh, x, y, z, w, d, kind:'static'|'move'|'vanish', t, baseX}
+  let coins = []; // {mesh, x, y, z, taken}
+  let player, playerPos, vel, onGround, lives, score, coinsGot, level, deadT, won;
+  let checkpoint = { x: 0, y: 2.2, z: 0 };
+  let flagMesh = null;
+
+  const clearWorld = () => {
+    platforms.forEach(p => scene.remove(p.mesh));
+    coins.forEach(c => scene.remove(c.mesh));
+    if (flagMesh) scene.remove(flagMesh);
+    platforms = [];
+    coins = [];
+    flagMesh = null;
+  };
+
+  const addPlatform = (x, y, z, w, d, kind = 'static', color = 0x8c5a34) => {
+    const geo = new THREE.BoxGeometry(w, 1, d);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    // grass cap
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), new THREE.MeshStandardMaterial({ color: 0x4b974b }));
+    cap.position.set(x, y + 0.59, z);
+    scene.add(cap);
+    platforms.push({ mesh, cap, x, y, z, w, d, kind, t: Math.random() * 6, baseX: x, gone: 0 });
+  };
+
+  const addCoin = (x, y, z) => {
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.45, 0.12, 16),
+      new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x7a5c12, metalness: 0.6, roughness: 0.35 }),
+    );
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    coins.push({ mesh, x, y, z, taken: false });
+  };
+
+  const buildLevel = () => {
+    clearWorld();
+    addPlatform(0, -0.5, 0, 9, 9, 'static'); // start island
+    let y = 0;
+    let x = 0;
+    let z = 0;
+    const rng = (a, b) => a + Math.random() * (b - a);
+    for (let i = 0; i < 22; i++) {
+      y += rng(1.6, 2.6);
+      x += rng(-3.2, 3.2);
+      z += rng(-1.6, 1.6);
+      x = Math.max(-8, Math.min(8, x));
+      z = Math.max(-5, Math.min(5, z));
+      const kind = i > 4 && i % 4 === 0 ? 'move' : i > 6 && i % 5 === 0 ? 'vanish' : 'static';
+      addPlatform(x, y, z, rng(2.6, 4.2), rng(2.6, 4.2), kind, kind === 'vanish' ? 0xc7753f : kind === 'move' ? 0x0d69ac : 0x8c5a34);
+      if (i % 2 === 0) addCoin(x, y + 1.4, z);
+      if (i % 7 === 3) addCoin(x + 1.2, y + 1.4, z);
     }
+    // finish flag
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0xe2e2e2 }));
+    pole.position.set(x, y + 2.2, z);
+    scene.add(pole);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1, 0.08), new THREE.MeshStandardMaterial({ color: 0xd33a2c }));
+    flag.position.set(x + 0.85, y + 3.3, z);
+    scene.add(flag);
+    flagMesh = flag;
   };
 
-  const respawn = () => {
-    const p = lastPlatform || platforms[0];
-    player.x = p.x + p.w / 2 - PLAYER_W / 2;
-    player.y = p.y - PLAYER_H - 2;
-    player.vx = 0;
-    player.vy = 0;
-    deadTimer = 0.6;
-  };
+  player = makeCharacter();
+  scene.add(player);
 
   const reset = () => {
-    player = { x: 330, y: 300, vx: 0, vy: 0, onGround: false, face: 1 };
-    platforms = [makePlatform(300, 380, 200, 'static')];
-    coins = [];
-    for (let i = 0; i < 8; i++) {
-      const last = platforms[platforms.length - 1];
-      const p = makePlatform(rand(16, W - 180), last.y - rand(70, 110), rand(110, 180), 'static');
-      platforms.push(p);
-      if (Math.random() < 0.3) coins.push({ x: p.x + p.w / 2, y: p.y - 26, taken: false, t: 0 });
-    }
-    startY = 300;
-    camY = 0;
+    buildLevel();
+    playerPos = new THREE.Vector3(0, 1.2, 0);
+    vel = new THREE.Vector3();
+    onGround = false;
     lives = 3;
-    coinsTaken = 0;
-    deadTimer = 0.5;
-    lastPlatform = platforms[0];
+    score = 0;
+    coinsGot = 0;
+    level = 1;
+    deadT = 0;
+    won = false;
+    checkpoint = { x: 0, y: 1.2, z: 0 };
+    api.setLives(lives);
     api.setScore(0);
+    player.visible = true;
   };
 
-  const altitudeScore = () => Math.max(0, Math.floor((startY - player.y) / 8));
-
-  const update = (dt, input) => {
-    if (deadTimer > 0) {
-      deadTimer -= dt;
+  const die = () => {
+    lives -= 1;
+    api.setLives(Math.max(0, lives));
+    if (lives <= 0) {
+      api.gameOver();
       return;
     }
-    // horizontal
-    const dir = (input.held.right ? 1 : 0) - (input.held.left ? 1 : 0);
-    player.vx = dir * MOVE_SPEED;
-    if (dir !== 0) player.face = dir;
-    player.x += player.vx * dt;
-    if (player.x < 4) player.x = 4;
-    if (player.x + PLAYER_W > W - 4) player.x = W - 4 - PLAYER_W;
-
-    // jump (edge) + variable height
-    if (input.pressed.jump && player.onGround) {
-      player.vy = JUMP_V;
-      player.onGround = false;
-    }
-    if (!input.held.jump && player.vy < JUMP_V * 0.45) player.vy = JUMP_V * 0.45;
-
-    player.vy += GRAVITY * dt;
-    const prevBottom = player.y + PLAYER_H;
-    player.y += player.vy * dt;
-
-    // moving platforms
-    for (const p of platforms) {
-      if (p.type === 'moving') {
-        p.x += p.vx * dt;
-        if (p.x < 8 || p.x + p.w > W - 8) p.vx *= -1;
-      }
-      if (p.type === 'fade') {
-        if (p.fadeState === 'fading') {
-          p.fadeT -= dt;
-          if (p.fadeT <= 0) { p.fadeState = 'gone'; p.fadeT = 2.2; }
-        } else if (p.fadeState === 'gone') {
-          p.fadeT -= dt;
-          if (p.fadeT <= 0) { p.fadeState = 'solid'; p.touched = false; }
-        }
-      }
-    }
-
-    // collisions (land on top)
-    player.onGround = false;
-    if (player.vy >= 0) {
-      for (const p of platforms) {
-        if (p.fadeState === 'gone') continue;
-        const bottom = player.y + PLAYER_H;
-        if (
-          prevBottom <= p.y + 8 &&
-          bottom >= p.y &&
-          player.x + PLAYER_W > p.x &&
-          player.x < p.x + p.w
-        ) {
-          player.y = p.y - PLAYER_H;
-          player.vy = 0;
-          player.onGround = true;
-          lastPlatform = p;
-          if (p.type === 'moving') player.x += p.vx * dt;
-          if (p.type === 'fade' && !p.touched) {
-            p.touched = true;
-            p.fadeState = 'fading';
-            p.fadeT = 0.75;
-          }
-          break;
-        }
-      }
-    }
-
-    // coins
-    for (const c of coins) {
-      if (c.taken) continue;
-      c.t += dt * 4;
-      const cx = player.x + PLAYER_W / 2;
-      const cy = player.y + PLAYER_H / 2;
-      if (Math.abs(cx - c.x) < 26 && Math.abs(cy - c.y) < 30) {
-        c.taken = true;
-        coinsTaken++;
-      }
-    }
-
-    // camera follows upward only
-    const targetCam = Math.min(player.y - 220, camY);
-    camY = targetCam;
-
-    // fell off screen
-    if (player.y > camY + H + 160) {
-      lives--;
-      if (lives <= 0) {
-        api.setScore(altitudeScore() + coinsTaken * 25);
-        api.gameOver();
-        return;
-      }
-      respawn();
-    }
-
-    // cull far-below platforms
-    if (platforms.length > 60) {
-      platforms = platforms.filter((p) => p.y < camY + H + 400);
-      coins = coins.filter((c) => !c.taken && c.y < camY + H + 400);
-    }
-    generateTo(camY - 500);
-
-    api.setScore(altitudeScore() + coinsTaken * 25);
-    api.setLives(lives);
+    deadT = 0.8;
+    playerPos.set(checkpoint.x, checkpoint.y, checkpoint.z);
+    vel.set(0, 0, 0);
   };
 
-  const draw = (ctx) => {
-    // sky
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#6ec6ff');
-    g.addColorStop(1, '#c9ecff');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+  const update = (dt, input) => {
+    dt = Math.min(dt, 0.05);
 
-    // clouds (parallax)
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    for (let i = 0; i < 6; i++) {
-      const cx = ((i * 173 + 40) % (W + 120)) - 60;
-      const cy = ((i * 220 - camY * 0.25) % (H + 200)) - 100;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, 52, 18, 0, 0, Math.PI * 2);
-      ctx.ellipse(cx + 34, cy - 10, 34, 15, 0, 0, Math.PI * 2);
-      ctx.ellipse(cx - 32, cy - 6, 28, 13, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    const oy = -camY;
-
-    // platforms with studs
+    // moving / vanishing platforms
     for (const p of platforms) {
-      const y = p.y + oy;
-      if (y > H + 40 || y < -40) continue;
-      let base = '#3b6ea5';
-      if (p.type === 'moving') base = '#e08a2e';
-      if (p.type === 'fade') base = p.fadeState === 'gone' ? null : p.fadeState === 'fading' ? 'rgba(120,80,200,0.55)' : '#7b4fc0';
-      if (!base) continue;
-      ctx.fillStyle = base;
-      ctx.fillRect(p.x, y, p.w, p.h);
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillRect(p.x, y, p.w, 4);
-      ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      for (let sx = p.x + 12; sx < p.x + p.w - 8; sx += 26) {
-        ctx.beginPath();
-        ctx.arc(sx, y + p.h / 2 + 2, 5, 0, Math.PI * 2);
-        ctx.fill();
+      p.t += dt;
+      if (p.kind === 'move') {
+        const nx = p.baseX + Math.sin(p.t * 1.1) * 1.8;
+        const dx = nx - p.x;
+        p.x = nx;
+        p.mesh.position.x = nx;
+        if (p.cap) p.cap.position.x = nx;
+        // carry player
+        if (onGround && Math.abs(playerPos.x - p.x) < p.w / 2 + 0.6 && Math.abs(playerPos.z - p.z) < p.d / 2 + 0.6 && Math.abs(playerPos.y - (p.y + 1.5)) < 1.2) {
+          playerPos.x += dx;
+        }
+      } else if (p.kind === 'vanish') {
+        if (p.gone > 0) {
+          p.gone -= dt;
+          const show = p.gone <= 0;
+          p.mesh.visible = show;
+          if (p.cap) p.cap.visible = show;
+        }
       }
     }
 
-    // coins
-    for (const c of coins) {
-      if (c.taken) continue;
-      const y = c.y + oy;
-      if (y > H + 30 || y < -30) continue;
-      const wobble = Math.sin(c.t) * 4;
-      ctx.fillStyle = '#f5c518';
-      ctx.beginPath();
-      ctx.ellipse(c.x, y + wobble, 10, 12, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#c79a12';
-      ctx.lineWidth = 3;
-      ctx.stroke();
+    if (deadT > 0) {
+      deadT -= dt;
+    } else {
+      // movement
+      const dir = new THREE.Vector3();
+      if (input.held.left) dir.x -= 1;
+      if (input.held.right) dir.x += 1;
+      if (input.held.up) dir.z -= 1;
+      if (input.held.down) dir.z += 1;
+      if (dir.lengthSq() > 0) {
+        dir.normalize();
+        playerPos.x += dir.x * MOVE_SPEED * dt;
+        playerPos.z += dir.z * MOVE_SPEED * dt;
+        player.rotation.y = Math.atan2(dir.x, dir.z);
+      }
+      // jump + gravity
+      if ((input.pressed.jump || input.pressed.up && !onGround === false) && onGround) {
+        vel.y = JUMP_V;
+        onGround = false;
+      }
+      vel.y += GRAVITY * dt;
+      playerPos.y += vel.y * dt;
+
+      // collisions with platforms (AABB, top landing)
+      onGround = false;
+      for (const p of platforms) {
+        if (p.kind === 'vanish' && p.mesh.visible === false) continue;
+        const halfW = p.w / 2 + 0.55;
+        const halfD = p.d / 2 + 0.55;
+        if (Math.abs(playerPos.x - p.x) < halfW && Math.abs(playerPos.z - p.z) < halfD) {
+          const top = p.y + 1.0;
+          if (playerPos.y <= top + 0.1 && playerPos.y > top - 1.2 && vel.y <= 0) {
+            playerPos.y = top + 0.02;
+            vel.y = 0;
+            onGround = true;
+            if (p.kind === 'vanish' && p.gone <= 0) p.gone = 1.2;
+          }
+        }
+      }
+
+      // coins
+      for (const c of coins) {
+        if (c.taken) continue;
+        const d = Math.abs(playerPos.x - c.x) + Math.abs(playerPos.y - c.y) + Math.abs(playerPos.z - c.z);
+        if (d < 1.6) {
+          c.taken = true;
+          scene.remove(c.mesh);
+          coinsGot += 1;
+          score += 10;
+          api.setScore(score);
+        }
+      }
+
+      // fell?
+      if (playerPos.y < -12) die();
     }
 
-    // player (mini noob)
-    const px = player.x;
-    const py = player.y + oy;
-    if (deadTimer <= 0) {
-      ctx.fillStyle = '#f5cd30'; // head + arms
-      ctx.fillRect(px + 4, py, 20, 14);
-      ctx.fillRect(px - 4, py + 16, 8, 16);
-      ctx.fillRect(px + PLAYER_W - 4, py + 16, 8, 16);
-      ctx.fillStyle = '#0d69ac'; // torso
-      ctx.fillRect(px + 2, py + 14, PLAYER_W - 4, 12);
-      ctx.fillStyle = '#4b974b'; // legs
-      ctx.fillRect(px + 3, py + 26, 10, 10);
-      ctx.fillRect(px + 15, py + 26, 10, 10);
-      // face
-      ctx.fillStyle = '#222';
-      const fx = player.face > 0 ? 1 : -1;
-      ctx.fillRect(px + 10 + fx * 3, py + 5, 3, 3);
-      ctx.fillRect(px + 17 + fx * 3, py + 5, 3, 3);
+    player.position.copy(playerPos);
+
+    // flag reach
+    if (flagMesh && !won) {
+      const d = Math.abs(playerPos.x - flagMesh.position.x) + Math.abs(playerPos.z - flagMesh.position.z);
+      if (d < 2.4 && playerPos.y > flagMesh.position.y - 4) {
+        won = true;
+        score += 100;
+        api.setScore(score);
+        api.gameOver();
+      }
     }
+
+    // camera: side-follow
+    camera.position.lerp(new THREE.Vector3(playerPos.x * 0.55, playerPos.y + 4.2, playerPos.z + 11.5), 0.09);
+    camera.lookAt(playerPos.x * 0.8, playerPos.y + 1.2, playerPos.z);
+
+    renderer.render(scene, camera);
   };
 
   reset();
-  return { reset, update, draw, W, H };
+  return { reset, update, W, H };
 }

@@ -73,9 +73,9 @@ const GamePlayer = ({ game, onSubmitScore, onPlayed }) => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
-    const ctx = canvas.getContext('2d');
     inputRef.current = buildInput();
-    gameRef.current = factory(gameApi);
+    gameRef.current = factory(gameApi, canvas);
+    const ctx = gameRef.current && gameRef.current.draw ? canvas.getContext('2d') : null;
 
     const clearPressed = () => {
       const p = inputRef.current.pressed;
@@ -94,7 +94,7 @@ const GamePlayer = ({ game, onSubmitScore, onPlayed }) => {
       if (stateRef.current === 'playing') {
         g.update(dt, inputRef.current);
       }
-      g.draw(ctx);
+      if (g.draw) g.draw(ctx);
       clearPressed();
     };
     rafRef.current = requestAnimationFrame(loop);

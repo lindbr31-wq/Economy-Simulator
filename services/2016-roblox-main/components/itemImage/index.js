@@ -1,39 +1,28 @@
 import { createUseStyles } from "react-jss";
-import { getBaseUrl } from "../../lib/request";
-import ThumbnailStore from "../../stores/thumbnailStore";
-import {reportImageFail} from "../../services/metrics";
-import {useEffect, useState} from "react";
+import React from "react";
+import dynamic from "next/dynamic";
+
+const ItemPreview3D = dynamic(() => import("../itemPreview3d"), { ssr: false });
+
+// Item images across the site are interactive 3D previews (turntable).
+// Keeps the original props ({id, name, className}) so every 2016 component
+// that showed an item image now shows the 3D preview.
 
 const useStyles = createUseStyles({
-  image: {
+  wrapper: {
     maxWidth: '400px',
     width: '100%',
     margin: '0 auto',
-    height: 'auto',
-    paddingTop: '20px',
   },
-})
+});
 
 const ItemImage = (props) => {
   const s = useStyles();
-  const store = ThumbnailStore.useContainer();
-  const [retryCount, setRetryCount] = useState(0);
-
-  const [image, setImage] = useState(store.getPlaceholder());
-  useEffect(() => {
-    setImage(store.getAssetThumbnail(props.id, '420x420'));
-  }, [props, store.thumbnails]);
-
-  return <img className={s.image + ' ' + (props.className || '')} src={image} alt={props.name} onError={(e) => {
-    if (retryCount >= 3) return;
-    reportImageFail({
-      errorEvent: e,
-      type: 'assetThumbnail',
-      src: image,
-    })
-    setRetryCount(retryCount + 1);
-    setImage(store.getPlaceholder())
-  }}/>
+  return (
+    <div className={s.wrapper + ' ' + (props.className || '')} title={props.name}>
+      <ItemPreview3D id={props.id} height={props.height || 150} />
+    </div>
+  );
 }
 
 export default ItemImage;

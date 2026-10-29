@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createUseStyles } from "react-jss";
+import dynamic from "next/dynamic";
 import { abbreviateNumber } from "../../lib/numberUtils";
 import { itemNameToEncodedName } from "../../services/catalog";
 import { getGameUrl } from "../../services/games";
 import CreatorLink from "../creatorLink";
 import useCardStyles from "../userProfile/styles/card";
 import Link from "../link";
+
+const GamePreview3D = dynamic(() => import("../gamePreview3d"), { ssr: false });
 
 const useStyles = createUseStyles({
   label: {
@@ -184,14 +187,7 @@ const SmallGameCard = props => {
       <Link href={url}>
         <a>
           <div className={s.imageWrapper}>
-            <img className={s.image} src={iconUrl} alt={props.name} onLoad={(e) => {
-            }} onError={(e) => {
-              if (!iconUrl || iconUrl.indexOf('empty.png') !== -1) return;
-              setIconUrl('/img/empty.png');
-              setTimeout(() => {
-                setIconUrl(props.iconUrl);
-              }, 1000);
-            }}/>
+            <GamePreview3D thumbKey={props.thumbKey || iconUrl} height={124} />
           </div>
         </a>
       </Link>

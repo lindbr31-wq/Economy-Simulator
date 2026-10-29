@@ -57,6 +57,10 @@ export const acceptFriendRequest = ({ userId }) => {
   return Promise.resolve();
 }
 
+export const sendFriendRequest = ({ userId }) => {
+  return Promise.resolve();
+}
+
 export const declineFriendRequest = ({ userId }) => {
   return Promise.resolve();
 }

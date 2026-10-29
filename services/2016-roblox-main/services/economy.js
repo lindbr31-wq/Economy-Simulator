@@ -3,8 +3,8 @@ import { getFullUrl } from "../lib/request";
 
 
 export const getResellers = ({ assetId, cursor, limit }) => {
-  const url = getFullUrl('economy', '/v1/assets/' + assetId + '/resellers?limit=' + limit + '&cursor=' + encodeURIComponent(cursor || ''));
-  return request('GET', url);
+  // No resellers on the self-contained site.
+  return Promise.resolve({ data: [] });
 }
 
 export const getRobux = ({ userId }) => {
@@ -17,17 +17,23 @@ export const getRobuxGroup = ({ groupId }) => {
 }
 
 export const getResellableCopies = ({ assetId, userId }) => {
-  return request('GET', getFullUrl('economy', `/v1/assets/${assetId}/users/${userId}/resellable-copies`)).then(d => d.data);
+  return Promise.resolve({ data: [] });
 }
 
 export const purchaseItem = ({ productId, assetId, sellerId, userAssetId, price, expectedCurrency }) => {
-  return request('POST', getFullUrl('economy', `/v1/purchases/products/${productId}`), {
-    assetId,
+  // Local Supabase-backed purchase against the starter wallet.
+  return request('POST', '/api/web/catalog/' + assetId + '/buy', {
+    expectedCurrency: expectedCurrency,
     expectedPrice: price,
-    expectedSellerId: sellerId,
-    userAssetId,
-    expectedCurrency,
-  }).then(d => d.data);
+  }).then(d => {
+    return { purchased: true, ...d.data.data };
+  }).catch(e => {
+    const message = (e.response && e.response.data && e.response.data.errors && e.response.data.errors[0] && e.response.data.errors[0].message) || '';
+    if (String(message).toLowerCase().includes('funds') || String(message).toLowerCase().includes('currency')) {
+      return { purchased: false, reason: 'InsufficientFunds' };
+    }
+    return { purchased: false, reason: message || 'PURCHASE_ERROR' };
+  });
 }
 
 export const setResellableAssetPrice = ({ assetId, userAssetId, price }) => {

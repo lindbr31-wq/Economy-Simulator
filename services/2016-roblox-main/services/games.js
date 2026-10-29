@@ -45,40 +45,76 @@ export const getGameList = ({ sortToken, limit, genre = 0, keyword }) => {
 }
 
 export const getGameMedia = ({ universeId }) => {
-  return request('GET', getFullUrl('games', `/v2/games/${universeId}/media`)).then(d => d.data.data);
+  return Promise.resolve([]);
 }
 
 export const launchGame = async ({ placeId }) => {
-  const result = await request('GET', getBaseUrl() + '/game/get-join-script?placeId=' + encodeURIComponent(placeId));
-  const toClick = result.data.joinUrl;
-  const aTag = document.createElement('a');
-  aTag.setAttribute('href', result.data.prefix + '' + result.data.joinScriptUrl);
-  document.body.appendChild(aTag);
-  aTag.click();
-  // delay before deletion is required on some browsers, not sure why
-  setTimeout(() => {
-    aTag.remove();
-  }, 1000);
+  // Join flow is handled by the web player page (/RobloxApp/Play).
+  window.location.href = '/RobloxApp/Play?placeId=' + placeId;
 }
 
+const toPlaceDetails = (row) => ({
+  id: Number(row.id),
+  name: row.name,
+  description: row.description || '',
+  builder: row.creator || 'EconomySim Games',
+  builderId: 1,
+  isPlayable: true,
+  reasonProhibited: 'None',
+  assetTypeId: 9,
+});
+
+const toUniverseDetails = (row) => ({
+  id: Number(row.id),
+  rootPlaceId: Number(row.id),
+  name: row.name,
+  description: row.description || '',
+  creator: { id: 1, name: row.creator || 'EconomySim Games', type: 'User' },
+  price: null,
+  allowedGearGenres: [],
+  playing: Math.max(1, Math.round(Number(row.plays || 0) / 250)),
+  visits: Number(row.plays || 0),
+  maxPlayers: 12,
+  created: row.created_at || new Date(2016, 5, 1).toISOString(),
+  updated: row.created_at || new Date(2016, 5, 1).toISOString(),
+  genre: row.genre,
+  isAllGenre: false,
+  isFavoritedByUser: false,
+});
+
+const fetchGameRows = () =>
+  request('GET', '/api/web/games').then(d => d.data.data || []);
+
 export const multiGetPlaceDetails = ({ placeIds }) => {
-  return request('GET', getFullUrl('games', `/v1/games/multiget-place-details?placeIds=${encodeURIComponent(placeIds.join(','))}`)).then(d => d.data);
+  const ids = (placeIds || []).map(Number);
+  return fetchGameRows().then(rows =>
+    ids.map(id => rows.find(r => Number(r.id) === id)).filter(Boolean).map(toPlaceDetails)
+  );
 }
 
 export const multiGetUniverseDetails = ({ universeIds }) => {
-  return request('GET', getFullUrl('games', `/v1/games?universeIds=${encodeURIComponent(universeIds.join(','))}`)).then(d => d.data.data);
+  const ids = (universeIds || []).map(Number);
+  return fetchGameRows().then(rows =>
+    ids.map(id => rows.find(r => Number(r.id) === id)).filter(Boolean).map(toUniverseDetails)
+  );
 }
 
 export const getServers = ({ placeId, offset }) => {
-  return request('GET', getBaseUrl() + `/games/getgameinstancesjson?placeId=${placeId}&startIndex=${offset}`).then(d => d.data);
+  return Promise.resolve({ Collection: [], TotalCollectionSize: 0 });
 }
 
 export const multiGetGameVotes = ({universeIds}) => {
-  return request('GET', getFullUrl('games', '/v1/games/votes?universeIds=' + encodeURIComponent(universeIds.join(',')))).then(d => d.data.data);
+  const ids = (universeIds || []).map(Number);
+  return fetchGameRows().then(rows =>
+    ids.map(id => {
+      const r = rows.find(x => Number(x.id) === id);
+      return r ? { id: Number(r.id), upVotes: Number(r.likes || 0), downVotes: Number(r.dislikes || 0) } : null;
+    }).filter(Boolean)
+  );
 }
 
 export const voteOnGame = ({universeId, isUpvote}) => {
-  return request('PATCH', getFullUrl('games', '/v1/games/'+universeId+'/user-votes'), {
-    vote: isUpvote,
-  }).then(d => d.data.data);
+  return request('POST', '/api/web/games/' + universeId + '/vote', {
+    vote: isUpvote ? 1 : -1,
+  }).then(d => d.data.data || d.data);
 }

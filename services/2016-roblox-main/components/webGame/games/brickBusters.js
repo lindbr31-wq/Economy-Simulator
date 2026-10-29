@@ -1,245 +1,190 @@
-// Brick Busters - classic breakout-style arcade. Canvas only, no game server.
+import * as THREE from 'three';
+
+// Brick Busters — 3D. Keep the ball in play, smash the brick wall.
 
 const W = 800;
 const H = 450;
-const PADDLE_Y = H - 46;
-const BALL_R = 9;
-const BASE_SPEED = 340;
-const ROW_COLORS = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#1abc9c'];
 
-const rand = (a, b) => a + Math.random() * (b - a);
+const BRICK_COLORS = [0xd33a2c, 0xe8a33d, 0x4b974b, 0x0d69ac, 0x923978];
 
-export default function createBrickBusters(api) {
-  let paddle, ball, bricks, level, lives, state, wideT, particles;
+export default function createBrickBusters(api, canvas) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x171a21, 1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  camera.position.set(0, 2.2, 13.5);
+  camera.lookAt(0, 1.2, 0);
 
-  const buildBricks = () => {
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.0));
+  const key = new THREE.DirectionalLight(0xffffff, 1.0);
+  key.position.set(5, 10, 8);
+  scene.add(key);
+
+  const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.1 });
+  const box = (w, h, d, c) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c));
+
+  // arena floor + back wall
+  const floor = box(16, 0.3, 8, 0x2c2f33);
+  floor.position.set(0, -1.9, 1);
+  scene.add(floor);
+  const back = box(16, 9, 0.3, 0x22252a);
+  back.position.set(0, 2.4, -3.6);
+  scene.add(back);
+
+  const paddle = box(2.6, 0.42, 1.1, 0x2966c0);
+  paddle.position.set(0, -1.45, 4.6);
+  scene.add(paddle);
+
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 14), mat(0xf8f8f8));
+  scene.add(ball);
+
+  let bricks = []; // {mesh, alive}
+  let paddleX, ballPos, ballVel, lives, score, level, stuck, wideT;
+  let powerup = null; // {mesh, y}
+
+  const buildWall = () => {
+    bricks.forEach(b => scene.remove(b.mesh));
     bricks = [];
-    const cols = 10;
-    const rows = 5 + Math.min(level, 3);
-    const margin = 40;
-    const bw = (W - margin * 2) / cols;
-    const bh = 22;
+    const rows = Math.min(4 + level, 7);
+    const cols = 9;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        bricks.push({
-          x: margin + c * bw,
-          y: 56 + r * (bh + 5),
-          w: bw - 5,
-          h: bh,
-          color: ROW_COLORS[r % ROW_COLORS.length],
-          alive: true,
-        });
+        const m = box(1.42, 0.55, 0.6, BRICK_COLORS[r % BRICK_COLORS.length]);
+        m.position.set(-6.4 + c * 1.6, 5.6 - r * 0.78, -1.6);
+        scene.add(m);
+        bricks.push({ mesh: m, alive: true });
       }
     }
   };
 
-  const stickBall = () => {
-    ball.x = paddle.x + paddle.w / 2;
-    ball.y = PADDLE_Y - BALL_R - 2;
-    ball.vx = 0;
-    ball.vy = 0;
-    state = 'ready';
+  const resetBall = () => {
+    ballPos.set(paddleX, -0.85, 4.6);
+    ballVel.set(0, 0, 0);
+    stuck = true;
   };
 
   const reset = () => {
-    paddle = { x: W / 2 - 55, w: 110, h: 14 };
-    ball = { x: 0, y: 0, vx: 0, vy: 0 };
-    level = 1;
+    paddleX = 0;
+    ballPos = new THREE.Vector3();
+    ballVel = new THREE.Vector3();
     lives = 3;
+    score = 0;
+    level = 1;
     wideT = 0;
-    particles = [];
-    buildBricks();
-    stickBall();
-    api.setScore(0);
+    powerup = null;
+    buildWall();
+    resetBall();
     api.setLives(lives);
+    api.setScore(0);
   };
 
   const launch = () => {
-    const speed = BASE_SPEED + (level - 1) * 32;
-    const angle = rand(-0.6, 0.6) - Math.PI / 2;
-    ball.vx = Math.cos(angle) * speed;
-    ball.vy = Math.sin(angle) * speed;
-    state = 'playing';
+    if (!stuck) return;
+    stuck = false;
+    const angle = (Math.random() * 0.6 - 0.3) + Math.PI / 2 * -1;
+    const speed = 8 + level * 0.8;
+    ballVel.set(Math.sin(angle) * speed * 0.55, Math.abs(Math.cos(angle)) * speed * -1, 0);
   };
 
-  const burst = (x, y, color) => {
-    for (let i = 0; i < 8; i++) {
-      particles.push({ x, y, vx: rand(-90, 90), vy: rand(-120, 30), t: 0.35, color });
-    }
-  };
+  const update = (dt, input) => {
+    dt = Math.min(dt, 0.05);
 
-  const update = (dt, input, apiRef) => {
     // paddle control
-    if (input.held.left) paddle.x -= 520 * dt;
-    if (input.held.right) paddle.x += 520 * dt;
-    if (input.pointer.down || input.pointer.x !== null) {
-      const target = input.pointer.x - paddle.w / 2;
-      paddle.x += (target - paddle.x) * Math.min(1, dt * 16);
+    if (input.held.left) paddleX -= 11 * dt;
+    if (input.held.right) paddleX += 11 * dt;
+    if (input.pointer.x !== null && input.pointer.x !== undefined) {
+      const target = ((input.pointer.x / W) * 2 - 1) * 7.2;
+      paddleX += (target - paddleX) * 0.35;
     }
-    paddle.x = Math.max(6, Math.min(W - paddle.w - 6, paddle.x));
+    paddleX = Math.max(-6.6, Math.min(6.6, paddleX));
+    paddle.position.x = paddleX;
+    paddle.scale.x = wideT > 0 ? 1.7 : 1;
 
-    if (wideT > 0) {
-      wideT -= dt;
-      if (wideT <= 0) {
-        const center = paddle.x + paddle.w / 2;
-        paddle.w = 110;
-        paddle.x = center - paddle.w / 2;
-      }
-    }
+    if (wideT > 0) wideT -= dt;
 
-    if (state === 'ready') {
-      stickBall();
-      if (input.pressed.jump || input.tapped || (input.pointer.down && input.pressed.pointer)) launch();
-      return;
-    }
+    if (input.pressed.jump || input.pressed.pointer) launch();
 
-    // ball physics (substeps for clean brick hits)
-    const steps = 2;
-    for (let s = 0; s < steps; s++) {
-      ball.x += (ball.vx * dt) / steps;
-      ball.y += (ball.vy * dt) / steps;
+    if (stuck) {
+      ballPos.set(paddleX, -0.85, 4.35);
+    } else {
+      ballPos.x += ballVel.x * dt;
+      ballPos.y += ballVel.y * dt;
 
-      if (ball.x - BALL_R < 4) { ball.x = 4 + BALL_R; ball.vx = Math.abs(ball.vx); }
-      if (ball.x + BALL_R > W - 4) { ball.x = W - 4 - BALL_R; ball.vx = -Math.abs(ball.vx); }
-      if (ball.y - BALL_R < 4) { ball.y = 4 + BALL_R; ball.vy = Math.abs(ball.vy); }
+      // walls
+      if (ballPos.x < -7.6) { ballPos.x = -7.6; ballVel.x = Math.abs(ballVel.x); }
+      if (ballPos.x > 7.6) { ballPos.x = 7.6; ballVel.x = -Math.abs(ballVel.x); }
+      if (ballPos.y > 8.2) { ballPos.y = 8.2; ballVel.y = -Math.abs(ballVel.y); }
 
       // paddle
-      if (
-        ball.vy > 0 &&
-        ball.y + BALL_R >= PADDLE_Y &&
-        ball.y + BALL_R <= PADDLE_Y + paddle.h + 12 &&
-        ball.x >= paddle.x - BALL_R &&
-        ball.x <= paddle.x + paddle.w + BALL_R
-      ) {
-        ball.y = PADDLE_Y - BALL_R;
-        const hit = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
-        const speed = Math.hypot(ball.vx, ball.vy);
-        const angle = hit * 1.05 - Math.PI / 2;
-        ball.vx = Math.cos(angle) * speed;
-        ball.vy = Math.sin(angle) * speed;
-        if (Math.abs(ball.vy) < 120) ball.vy = ball.vy < 0 ? -120 : 120;
+      const half = (wideT > 0 ? 2.2 : 1.3);
+      if (ballVel.y < 0 && ballPos.y <= -1.1 && ballPos.y > -1.9 && Math.abs(ballPos.x - paddleX) < half + 0.3) {
+        ballPos.y = -1.05;
+        const offset = (ballPos.x - paddleX) / half;
+        const speed = Math.min(16, ballVel.length() * 1.03);
+        ballVel.x = offset * speed * 0.85;
+        ballVel.y = Math.abs(Math.sqrt(Math.max(1, speed * speed - ballVel.x * ballVel.x)));
       }
 
       // bricks
       for (const b of bricks) {
         if (!b.alive) continue;
-        if (
-          ball.x + BALL_R > b.x &&
-          ball.x - BALL_R < b.x + b.w &&
-          ball.y + BALL_R > b.y &&
-          ball.y - BALL_R < b.y + b.h
-        ) {
+        const p = b.mesh.position;
+        if (Math.abs(ballPos.x - p.x) < 1.05 && Math.abs(ballPos.y - p.y) < 0.62) {
           b.alive = false;
-          burst(b.x + b.w / 2, b.y + b.h / 2, b.color);
-          api.addScore(50 * level);
-          const overlapX = Math.min(ball.x + BALL_R - b.x, b.x + b.w - (ball.x - BALL_R));
-          const overlapY = Math.min(ball.y + BALL_R - b.y, b.y + b.h - (ball.y - BALL_R));
-          if (overlapX < overlapY) ball.vx = -ball.vx;
-          else ball.vy = -ball.vy;
-          if (Math.random() < 0.12 && wideT <= 0 && paddle.w <= 110) {
-            particles.push({ x: b.x + b.w / 2, y: b.y, vx: 0, vy: 130, t: 999, color: '#2ecc71', powerup: true });
+          scene.remove(b.mesh);
+          ballVel.y *= -1;
+          score += 50;
+          api.setScore(score);
+          if (Math.random() < 0.12 && !powerup) {
+            const p2 = box(0.75, 0.35, 0.75, 0x4b974b);
+            p2.position.set(p.x, p.y, 3.2);
+            scene.add(p2);
+            powerup = { mesh: p2, y: p.y };
           }
           break;
         }
       }
-    }
 
-    // particles & powerups
-    for (const p of particles) {
-      if (p.powerup) {
-        p.y += p.vy * dt;
-        if (
-          p.y > PADDLE_Y - 6 &&
-          p.y < PADDLE_Y + 26 &&
-          p.x > paddle.x - 10 &&
-          p.x < paddle.x + paddle.w + 10
-        ) {
-          p.t = 0;
-          const center = paddle.x + paddle.w / 2;
-          paddle.w = 176;
-          paddle.x = center - paddle.w / 2;
+      // powerup catch
+      if (powerup) {
+        powerup.mesh.position.y -= 3.2 * dt;
+        powerup.mesh.rotation.y += dt * 3;
+        if (powerup.mesh.position.y < -1.2 && Math.abs(powerup.mesh.position.x - paddleX) < 2) {
           wideT = 12;
+          scene.remove(powerup.mesh);
+          powerup = null;
+        } else if (powerup.mesh.position.y < -2.6) {
+          scene.remove(powerup.mesh);
+          powerup = null;
         }
-      } else {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.vy += 320 * dt;
-        p.t -= dt;
       }
-    }
-    particles = particles.filter((p) => p.t > 0 && p.y < H + 20);
 
-    // fell out
-    if (ball.y - BALL_R > H) {
-      lives--;
-      api.setLives(lives);
-      if (lives <= 0) {
-        api.gameOver();
-        return;
+      // fell
+      if (ballPos.y < -3.2) {
+        lives -= 1;
+        api.setLives(Math.max(0, lives));
+        if (lives <= 0) {
+          api.gameOver();
+        } else {
+          resetBall();
+        }
       }
-      stickBall();
     }
 
     // level clear
-    if (bricks.every((b) => !b.alive)) {
-      level++;
-      api.addScore(250);
-      buildBricks();
-      stickBall();
-    }
-  };
-
-  const draw = (ctx) => {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#141b2d');
-    g.addColorStop(1, '#25334f');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    for (const b of bricks) {
-      if (!b.alive) continue;
-      ctx.fillStyle = b.color;
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.fillStyle = 'rgba(255,255,255,0.28)';
-      ctx.fillRect(b.x, b.y, b.w, 5);
-      ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      ctx.fillRect(b.x, b.y + b.h - 4, b.w, 4);
+    if (bricks.every(b => !b.alive)) {
+      level += 1;
+      score += 250;
+      api.setScore(score);
+      buildWall();
+      resetBall();
     }
 
-    for (const p of particles) {
-      if (p.powerup) {
-        ctx.fillStyle = '#2ecc71';
-        ctx.fillRect(p.x - 12, p.y - 8, 24, 16);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(p.x - 7, p.y - 2, 14, 4);
-      } else {
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = Math.max(0, Math.min(1, p.t * 3));
-        ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // paddle
-    ctx.fillStyle = '#e8eef5';
-    const pw = paddle.w;
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(paddle.x, PADDLE_Y, pw, paddle.h, 8) : ctx.rect(paddle.x, PADDLE_Y, pw, paddle.h);
-    ctx.fill();
-    ctx.fillStyle = '#3fc1c9';
-    ctx.fillRect(paddle.x + 6, PADDLE_Y + 3, pw - 12, 4);
-
-    // ball
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.beginPath();
-    ctx.arc(ball.x - 3, ball.y - 3, BALL_R * 0.4, 0, Math.PI * 2);
-    ctx.fill();
+    ball.position.copy(ballPos);
+    renderer.render(scene, camera);
   };
 
   reset();
-  return { reset, update, draw, W, H };
+  return { reset, update, W, H };
 }
