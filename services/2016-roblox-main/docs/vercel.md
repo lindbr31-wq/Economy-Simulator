@@ -1,186 +1,78 @@
-# Deploying the frontend to Vercel
+# Deploying the 2016 site to Vercel
 
-The `2016-roblox` frontend is a stock Next.js 12 app and deploys to Vercel as-is.
-Vercel hosts the website and its `/api/proxy` serverless function; **everything
-else (the `Roblox.Website` .NET server, `services/api`, admin, game-server/RCC)
-must still run somewhere with a public URL**, because Vercel's functions cannot
-reach `localhost`.
+Two Vercel projects now exist (team `bob1323s-projects`):
 
-```
-browser ──► https://your-app.vercel.app        (this frontend, on Vercel)
-                 │
-                 └── /api/proxy?...  ──► https://backend.yourdomain.com/apisite/...
-                                          (your .NET/API backend, anywhere public)
-```
+- **`economy-simulator-web`** (`prj_lKxHvNxI0L5qfFjpW8W8fLMxxiJi`) — decommissioned.
+  Its `rootDirectory` is `site-wipe/` (a minimal Next app that renders only the
+  text `jsdjdjfisdjf`), so `economy-simulator-web.vercel.app` shows that tombstone
+  and nothing else.
+- **`ai-research-blox`** (`prj_QsiZrmMVyaYv4Evm7meVFVbOKY7o`) — the live site:
+  `ai-research-blox.vercel.app`, `rootDirectory` = `services/2016-roblox-main`.
 
-## 1. Vercel project settings
+## Settings that matter
 
-Create a project with:
+* **Framework**: Next.js. `framework: "other"` is rejected by the API and
+  `framework: null` is silently ignored (stays `nextjs`), so the build target
+  must be a real Next app under the configured `rootDirectory`.
+* **Root directory**: `services/2016-roblox-main` (or `site-wipe` for the tombstone).
+* **Node version**: `24.x` — set via `engines.node` in `package.json`. The
+  project default can report `26.x`, which fails with
+  `BUILD_UTILS_NODE_VERSION_INVALID` if the build actually runs on it.
+* **Build command**: leave default (`next build` → `npm run build`).
+* **Install command**: leave default; `npm install` must use
+  `--legacy-peer-deps` (or `legacy-peer-deps=true` in `.npmrc`) because
+  `@wojtekmaj/enzyme-adapter-react-17` pins React 17 peer ranges.
 
-| Setting        | Value                              |
-|----------------|------------------------------------|
-| Root Directory | `services/2016-roblox-main`        |
-| Framework      | Next.js                            |
-| Node version   | 24.x (also pinned via `engines`)   |
-| Build command  | `next build` (default)             |
+## Environment variables
 
-`config.json` is gitignored and **not** required: when it is missing (or when
-running on Vercel), `next.config.js` builds the configuration from environment
-variables instead. Locally you can keep using `node ./util/create_config.js`.
+Create these on the project (`type: "encrypted"`, targets `production`,
+`preview`, `development` — plain type is rejected by the API):
 
-## 2. Environment variables
+| Key | Value |
+| --- | --- |
+| `SUPABASE_DB_URL` | Supabase pooled connection string (`aws-1-us-west-2.pooler.supabase.com:6543`, role `econ_web.<ref>`) — never the direct `db.*` host (IPv6-only, unreachable) |
+| `SESSION_KEY` | random 64-char secret for `ECON_SESSION` JWTs (HS256) |
+| `CSRF_KEY` | random 64-char secret for the CSRF double-submit cookie |
 
-Set these in the Vercel project (they are read at **build** time, so redeploy
-after changing them):
+`config.json` is generated at build time by `util/create_config.js`; it is
+gitignored and its values come from these environment variables.
 
-| Variable                     | Example value                                      | Notes |
-|------------------------------|----------------------------------------------------|-------|
-| `BACKEND_BASE_URL`           | `https://www.yourdomain.com`                       | Public URL of this frontend (used by the proxy's URL allow-list). |
-| `BACKEND_API_FORMAT`         | `https://backend.yourdomain.com/apisite/{0}{1}`    | How to reach the backend's apisite routes. `{0}` = api site name (www, api, assetdelivery, ...), `{1}` = path. |
-| `BACKEND_CHAT_URL`           | `https://backend.yourdomain.com/chat`              | SignalR chat hub. Must be absolute on Vercel (`/chat` would hit Vercel itself). |
-| `CSRF_KEY`                   | long random string                                 | **Required.** Fixed key for login-CSRF signing. Without it each serverless instance makes its own and logins break on cold starts. |
-| `SESSION_KEY`                | long random string                                 | **Required.** Signs the local login session cookie (`ECON_SESSION`) used by username/password auth. |
-| `SUPABASE_DB_URL`            | `postgres://econ_web.<ref>:<pw>@aws-1-us-west-2.pooler.supabase.com:6543/postgres` | **Required for login/signup.** Postgres connection string for the local auth API routes. Use the shared Supavisor pooler (IPv4) with the `[role].[project-ref]` username format - the direct `db.<ref>.supabase.co` host is IPv6-only on the free plan and unreachable from Vercel's IPv4-only lambdas. The pooler's cluster index (e.g. `aws-1-`) can NOT be derived from the region: if the wrong cluster answers with `(ENOTFOUND) tenant/user ... not found`, find the right one with `GET /v1/projects/<ref>/config/database/pooler` on the Supabase management API (or probe candidates via `/api/auth/health?token=<SESSION_KEY>&probe=<base64url connstring>`). |
-| `COOKIE_DOMAIN_REWRITE`      | *(leave empty on Vercel)*                          | Rewrites `Domain=` on `Set-Cookie` from the backend. Empty/unset strips it (host-only cookies — correct for `*.vercel.app`). Set to `localhost` or your domain if needed. |
-| `PROXY_ENABLED`              | `true` (default)                                   | `false` makes the browser call the backend directly (backend then needs CORS + credentials for the Vercel origin). |
-| `BACKEND_AUTHORIZATION`      | *(optional)*                                       | Shared secret forwarded to the backend, if your backend requires one. |
-| `BACKEND_AUTHORIZATION_HEADER` | *(optional)*                                     | Header name for the above (default `authorization`). |
+## First-time setup
 
-The proxy (`pages/api/proxy.js`) only forwards to hosts it considers safe: the
-domain of `BACKEND_BASE_URL` and the domain of `BACKEND_API_FORMAT`. So the
-frontend and the backend may live on **different** domains.
+1. `vercel link` to the project (or use `vercel --cwd services/2016-roblox-main`).
+2. `vercel env add SUPABASE_DB_URL production` (and `SESSION_KEY`, `CSRF_KEY`).
+3. `vercel --prod` from the repo root.
 
-## 3. Backend requirements
+## Redeploying after a push
 
-* The backend must be **publicly reachable** — a VPS, or a home machine behind
-  a Cloudflare Tunnel / ngrok / similar. A reverse proxy that maps
-  `https://backend.yourdomain.com/apisite/{0}{1}` onto the .NET site's
-  `/apisite/{0}{1}` routes works well.
-* For a clean setup use one base domain with split DNS:
-  `www.yourdomain.com` → Vercel, `backend.yourdomain.com` → your server. A
-  custom domain on Vercel is free and avoids cookie/proxy edge cases.
-* **Chat** (`Roblox.EconomyChat` / the SignalR hub at `/chat`) stays on the
-  backend; `BACKEND_CHAT_URL` just points the browser at it.
+The project is **unlinked from GitHub** (no auto-deploys). After each push to
+`main`, create a production deployment from the commit via the Vercel API
+(`POST /v13/deployments`) with `git_source` = `{ "type": "github",
+"repoId": 1370194386, "ref": "<full commit SHA>" }` and `name` = the project
+name. One manual deployment per push; the production alias follows the newest
+READY deployment.
 
-## 4. Database: Supabase Postgres
+## Seeding
 
-The services want PostgreSQL 13+. A Supabase project works directly. The
-canonical schema (81 tables, generated from the `services/api` knex migrations)
-lives in [`database/schema.sql`](../../../database/schema.sql) and is already
-applied to the Supabase project, including the `knex_migrations` bookkeeping —
-so `npx knex migrate:latest` in `services/api` will see everything as applied.
+The API routes create schema tables on demand; catalog items, games and
+starter wallets are seeded automatically (idempotently) on first read.
 
-A dedicated `econ_web` login role exists for the website (SELECT/INSERT/UPDATE/
-DELETE on `public`); put its connection string in `SUPABASE_DB_URL` as shown
-above. For the backend services (`services/api/config.json` for Knex and
-`services/Roblox/Roblox.Website/appsettings.json`), use the project's
-`postgres` superuser connection string from the Supabase dashboard:
+## 3D layer
 
-```json
-{
-  "knex": {
-    "client": "pg",
-    "connection": {
-      "host": "db.<project-ref>.supabase.co",
-      "user": "postgres",
-      "password": "<your-supabase-db-password>",
-      "database": "postgres",
-      "port": 5432,
-      "ssl": { "rejectUnauthorized": false }
-    }
-  }
-}
-```
+* **Playable games** — `components/webGame/games/*` are three.js games
+  (Sky Obby, Brick Busters, Crossy Canyon) rendered on the shared game canvas;
+  the original Play button navigates to `/RobloxApp/Play?placeId=N` (the
+  `launchUsingEsWeb` flag in `config.json`).
+* **Item previews** — every item image renders an interactive rotating 3D
+  preview (`components/itemPreview3d`) through the shared `ItemImage` slot.
+* **Game thumbnails** — game cards render interactive 3D dioramas
+  (`components/gamePreview3d`) through `SmallGameCard`.
+* The pages under `pages/games/`, `pages/catalog/` and `pages/My/Character.aspx.js`
+  are the **original main-branch versions, unmodified**; all behavior lives in
+  the services layer and shared components.
 
-Use the **direct** connection (port 5432) or session pooler for the long-running
-backend services; the transaction pooler (port 6543) is not a fit for Knex
-migrations. Run `npx knex migrate:latest` in `services/api` as usual.
+## Tombstone / rollback
 
-Note: Supabase does not provide **Redis**, which the backend also requires —
-run a local Redis (e.g. Memurai on Windows) or any hosted Redis and point the
-services at it.
-
-## 5. Logging in (no .ROBLOSECURITY required)
-
-The site has first-class username/password auth backed by the Supabase
-database:
-
-* `/signup` (also linked from the navbar and login modal) creates an account
-  and logs the user in. `/login` accepts username + password by default.
-* Passwords are hashed with **Argon2id** in libsodium's PHC format — the same
-  format the .NET backend's `PasswordHasher` uses, so accounts created through
-  the website can also log in through the backend later (and vice versa).
-* Sessions are a signed JWT in an HttpOnly `ECON_SESSION` cookie (30 days).
-* The old "login with a .ROBLOSECURITY cookie" flow is still available on the
-  login page as an advanced option (useful while the .NET backend exists and
-  issues those cookies).
-
-## 6. Games, catalog & avatar editor (no game server needed)
-
-The site ships with a self-contained web games client that needs **no game
-server** and no `services/api` backend - only Supabase (or nothing at all):
-
-- **`/games`** - three original canvas games (Sky Obby: Tower Trials, Brick
-  Busters, Crossy Canyon) playable instantly in the browser. The shared game
-  client (`components/webGame/`) handles input (keyboard/mouse/touch), pause and
-  score submission. Game pages include visit counts, like/dislike votes and a
-  per-game leaderboard (`web_game_score`).
-- **`/catalog`** - 22 original items (hats, faces, shirts, pants, gear) rendered
-  as SVG (`components/itemArt/`). Buying uses a starter wallet (100 R$ +
-  2,500 Tix) with an atomic balance-check purchase (`/api/web/catalog/[id]/buy`).
-- **`/My/Character.aspx`** - the avatar editor: R6 blocky avatar rendered as SVG
-  (`components/avatarArt/`), body colors, and equipping owned items (up to 3
-  hats). Configs validate against inventory server-side.
-
-Data lives in the `web_*` tables (see `database/schema.sql`, seeded; knex
-migration `20261029120000_webPlatform.js`). Every page works in **local mode**
-too: if the API is unreachable or the user is logged out, `lib/webStore.js`
-falls back to localStorage so games, purchases and avatar edits still work.
-
-## 7. Profile, friends, search & 3D avatar (site-wide social layer)
-
-The 2016 UI (profile pages, friends, user search, the home dashboard) is wired
-straight into the Supabase web layer through the same service files the site
-already uses — the original Theme2016 components and styling are untouched:
-
-- **Profile pages** (`/users/[id]/profile`) show the user's real avatar: the
-  interactive 3D R6 viewer (`components/avatar3d/`, three.js — drag to rotate,
-  scroll to zoom, hats/gear/face as 3D primitives) plus "Currently Wearing",
-  friends with headshots, join date and description.
-- **User search** (`/search/users`) searches real accounts
-  (`/api/web/users?keyword=`) with avatar thumbnails and presence.
-- **Home** (`/home`) is the working dashboard: greeting + headshot, friends row
-  with online status (`/api/web/presence`), and game rows with local thumbs.
-  Guests see a welcome panel with sign-up links instead of a blank page.
-- **Friends**: every user on the site is in your friends list
-  (`/api/web/friends` = all accounts except yourself); friend
-  request/follow/PM/trade counters resolve to zero.
-- **Images**: `/api/web/users/[id]/image?type=headshot|avatar`,
-  `/api/web/items/[id]/icon` and `/api/web/games/[id]/icon` render the same
-  React art components (`avatarArt`, `itemArt`, `webGame/thumbs`) to static SVG
-  on the server, so every `<img>` across the 2016 UI (player headshots, item
-  cards, game rows) shows real pictures with no external thumbnail service.
-- The navbar wallet (R$/Tix) reads the real `web_user_wallet`
-  (`/api/web/economy`).
-
-## 8. What still runs off-Vercel
-
-* Game joins (`PlaceLauncher.ashx`), RCC/game-server, and webplayer asset
-  serving depend on the backend being public too — deploying the site on Vercel
-  does not cover those.
-* Watch Vercel's serverless response size limit (4.5 MB on the Hobby plan) if
-  large assets are fetched *through* `/api/proxy` instead of directly from the
-  backend.
-
-## 9. Deploy
-
-```sh
-cd services/2016-roblox-main
-npm i
-npm test          # unit tests (proxy URL allow-list etc.)
-VERCEL=1 npm run build   # smoke-test the env-driven build
-```
-
-Then connect the repo in the Vercel dashboard (or `vercel deploy`) with the
-settings above. Remember: env vars are baked at build time — set them first,
-then deploy.
+To point the old domain at a tombstone again: change the old project's
+`rootDirectory` to `site-wipe` and deploy. To fully restore the old site there,
+set `rootDirectory` back to `services/2016-roblox-main` and redeploy.
