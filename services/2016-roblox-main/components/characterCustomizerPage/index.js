@@ -25,7 +25,12 @@ const CharacterPage = props => {
   }, [store.thumbnail, store.userId]);
 
   if (!store.userId) {
-    return null;
+    return <div className='row mt-4'>
+      <div className='col-12'>
+        <p className='mb-1'>Log in to see your avatar preview and headshot, and to customize your character.</p>
+        <p className='mb-0 text-muted' style={{fontSize: '13px'}}>Use the <strong>Login</strong> button in the top menu (or <a href='/signup'>Sign Up</a> for a new account).</p>
+      </div>
+    </div>;
   }
   return <div className='row mt-4'>
     <div className='col-12 col-lg-4'>
