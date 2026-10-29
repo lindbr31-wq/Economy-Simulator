@@ -14,13 +14,13 @@ const CATEGORY_TYPE = {
 
 // Local Supabase-backed inventory (2016 API shapes).
 const fetchOwned = () =>
-  axios.get('/api/web/inventory').then(d => d.data.data || []);
+  axios.get('/api/web/user/inv').then(d => (d.data && d.data.data && d.data.data.items) || []);
 
 export const getOwnedCopies = ({ assetId, userId }) => {
   return fetchOwned().then(items => {
     const owned = items.some(v => Number(v.id) === Number(assetId));
     return owned ? [{ userAssetId: 1, seller: null, price: null, serialNumber: null }] : [];
-  });
+  }).catch(() => []);
 }
 
 export const getInventory = ({ userId, limit, cursor, assetTypeId }) => {

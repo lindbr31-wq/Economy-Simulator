@@ -19,6 +19,8 @@ const defaultFlags = {
   avatarPageOutfitCreatedAtAvailable: false,
   catalogDetailsPageOwnersTabEnabled: false,
   requireLoginThroughCookie: false,
+  launchUsingEsWeb: true,
+  launchUsingEsURI: false,
 };
 
 // Build a config from environment variables. This is what runs on Vercel (and

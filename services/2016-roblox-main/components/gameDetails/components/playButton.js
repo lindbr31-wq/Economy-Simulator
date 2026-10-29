@@ -44,9 +44,8 @@ const PlayButton = props => {
     }else if (getFlag('launchUsingEsWeb', false)) {
       window.location.href = '/RobloxApp/Play?placeId=' + props.placeId;
     }else{
-      // TODO: Roblox URI handling here (is this even possible?)
-      alert('Support for joining ROBLOX games is not implemented. You will be redirected to ROBLOX to play this game.');
-      window.location.href = 'https://www.roblox.com/games/' + props.placeId + '/--';
+      // Join through the in-site Roblox client replica (the 2016 web player).
+      window.location.href = '/RobloxApp/Play?placeId=' + props.placeId;
     }
   }
 

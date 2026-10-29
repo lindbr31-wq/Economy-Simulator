@@ -177,11 +177,24 @@ const buildItemGroup = (item) => {
     g.add(hat);
   } else if (category === 'faces') {
     const headColor = hex(art.colors && art.colors.head, '#f5cd30');
-    const tex = faceTexture('#' + headColor.getHexString(), art);
-    const mats = [0, 1, 2, 3, 5].map(() => mat(headColor));
-    mats.splice(4, 0, mat(headColor, { map: tex }));
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.35, 1.35), mats);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.35, 1.35), mat(headColor));
     g.add(head);
+    // The face is a textured quad just in front of the head so it is always
+    // visible (per-face material indexing on the box proved unreliable).
+    let tex = null;
+    try {
+      tex = faceTexture('#' + headColor.getHexString(), art);
+    } catch (e) {
+      tex = null;
+    }
+    if (tex) {
+      const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.3, 1.18),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: false, side: THREE.DoubleSide })
+      );
+      face.position.set(0, 0, 0.681);
+      g.add(face);
+    }
   } else if (category === 'shirts') {
     const torso = hex(art.colors && art.colors.torso, '#0d69ac');
     const sleeve = hex(art.colors && art.colors.sleeve, '#f5cd30');
@@ -255,7 +268,12 @@ const ItemPreview3D = ({ item, id, height = 150, autoRotate = true }) => {
           }
         });
       }
-      state.group = buildItemGroup(resolvedRef.current || { art: {}, category: 'hats' });
+      try {
+        state.group = buildItemGroup(resolvedRef.current || { art: {}, category: 'hats' });
+      } catch (e) {
+        console.error('[ItemPreview3D] item build failed, using fallback', e);
+        state.group = buildItemGroup({ art: {}, category: 'hats' });
+      }
       scene.add(state.group);
     };
     rebuild();

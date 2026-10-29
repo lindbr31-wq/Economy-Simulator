@@ -188,6 +188,7 @@ const CatalogDetailsPage = createContainer(() => {
           setOwnedCopies(data);
         }).catch(e => {
           console.error('[error] could not get owned resellable copies', e);
+          setOwnedCopies([]);
         })
       } else {
         // Get normal copies
@@ -198,6 +199,7 @@ const CatalogDetailsPage = createContainer(() => {
           setOwnedCopies(data);
         }).catch(e => {
           console.error('[error] could not get owned copies', e);
+          setOwnedCopies([]);
         })
       }
     },
