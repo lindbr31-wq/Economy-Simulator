@@ -137,7 +137,33 @@ migration `20261029120000_webPlatform.js`). Every page works in **local mode**
 too: if the API is unreachable or the user is logged out, `lib/webStore.js`
 falls back to localStorage so games, purchases and avatar edits still work.
 
-## 7. What still runs off-Vercel
+## 7. Profile, friends, search & 3D avatar (site-wide social layer)
+
+The 2016 UI (profile pages, friends, user search, the home dashboard) is wired
+straight into the Supabase web layer through the same service files the site
+already uses — the original Theme2016 components and styling are untouched:
+
+- **Profile pages** (`/users/[id]/profile`) show the user's real avatar: the
+  interactive 3D R6 viewer (`components/avatar3d/`, three.js — drag to rotate,
+  scroll to zoom, hats/gear/face as 3D primitives) plus "Currently Wearing",
+  friends with headshots, join date and description.
+- **User search** (`/search/users`) searches real accounts
+  (`/api/web/users?keyword=`) with avatar thumbnails and presence.
+- **Home** (`/home`) is the working dashboard: greeting + headshot, friends row
+  with online status (`/api/web/presence`), and game rows with local thumbs.
+  Guests see a welcome panel with sign-up links instead of a blank page.
+- **Friends**: every user on the site is in your friends list
+  (`/api/web/friends` = all accounts except yourself); friend
+  request/follow/PM/trade counters resolve to zero.
+- **Images**: `/api/web/users/[id]/image?type=headshot|avatar`,
+  `/api/web/items/[id]/icon` and `/api/web/games/[id]/icon` render the same
+  React art components (`avatarArt`, `itemArt`, `webGame/thumbs`) to static SVG
+  on the server, so every `<img>` across the 2016 UI (player headshots, item
+  cards, game rows) shows real pictures with no external thumbnail service.
+- The navbar wallet (R$/Tix) reads the real `web_user_wallet`
+  (`/api/web/economy`).
+
+## 8. What still runs off-Vercel
 
 * Game joins (`PlaceLauncher.ashx`), RCC/game-server, and webplayer asset
   serving depend on the backend being public too — deploying the site on Vercel
@@ -146,7 +172,7 @@ falls back to localStorage so games, purchases and avatar edits still work.
   large assets are fetched *through* `/api/proxy` instead of directly from the
   backend.
 
-## 8. Deploy
+## 9. Deploy
 
 ```sh
 cd services/2016-roblox-main
